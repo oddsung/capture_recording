@@ -1,0 +1,12 @@
+node_modules/
+out/
+dist/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# native-helper build artifacts
+native-helper/bin/
+native-helper/obj/

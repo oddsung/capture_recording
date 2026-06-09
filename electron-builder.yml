@@ -1,0 +1,39 @@
+appId: com.doosung.capturerecording
+productName: Capture Recording
+directories:
+  buildResources: build
+  output: dist
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+asarUnpack:
+  - resources/**
+  # native modules must stay unpacked so their .node binaries load at runtime
+  - '**/node_modules/sharp/**'
+  - '**/node_modules/@img/**'
+  - '**/node_modules/uiohook-napi/**'
+win:
+  # We do not code-sign. Disabling sign+edit avoids the winCodeSign download whose
+  # archive contains macOS symlinks that fail to extract on Windows without
+  # Developer Mode / admin. For a signed release, enable Developer Mode and remove this.
+  signAndEditExecutable: false
+  icon: resources/icon.png
+  target:
+    - nsis
+  artifactName: ${productName}-${version}-setup.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+extraResources:
+  - from: resources/
+    to: .
+    filter:
+      - '**/*'
+  # C# UIA sidecar — resolved at runtime via process.resourcesPath/native-helper.exe
+  - from: native-helper/bin/native-helper.exe
+    to: native-helper.exe
