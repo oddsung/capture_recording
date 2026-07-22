@@ -221,8 +221,21 @@ export class AppController {
   start(): CaptureStatus {
     if (this.status === 'recording') return this.status
     this.hook.start()
+    this.warmUpHelper()
     this.setStatus('recording')
     return this.status
+  }
+
+  /**
+   * Fire-and-forget UIA query at the current cursor so the first real click
+   * resolves an element. The sidecar's first query pays .NET JIT + UIA init
+   * costs, and Chromium only builds its accessibility tree once something
+   * queries it — both make the first click's 500ms query miss its deadline.
+   */
+  private warmUpHelper(): void {
+    if (!this.helper.isAvailable()) return
+    const phys = toPhysical(screen.getCursorScreenPoint())
+    void this.helper.query(phys.x, phys.y, 3000)
   }
 
   stop(): CaptureStatus {
