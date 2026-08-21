@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppSettings, CaptureItem, CaptureStatus, ExportOptions } from '@shared/types'
+import type {
+  AppSettings,
+  CaptureItem,
+  CaptureStatus,
+  ExportOptions,
+  LicenseStatus
+} from '@shared/types'
 import { IPC, type CaptureApi } from '@shared/ipc'
 
 function subscribe<T>(channel: string, cb: (payload: T) => void): () => void {
@@ -34,11 +40,15 @@ const api: CaptureApi = {
   saveProfile: (name: string) => ipcRenderer.invoke(IPC.SAVE_PROFILE, name),
   applyProfile: (name: string) => ipcRenderer.invoke(IPC.APPLY_PROFILE, name),
   deleteProfile: (name: string) => ipcRenderer.invoke(IPC.DELETE_PROFILE, name),
+  getLicense: () => ipcRenderer.invoke(IPC.GET_LICENSE),
+  activateLicense: (key: string) => ipcRenderer.invoke(IPC.ACTIVATE_LICENSE, key),
+  deactivateLicense: () => ipcRenderer.invoke(IPC.DEACTIVATE_LICENSE),
 
   onStatusChanged: (cb: (s: CaptureStatus) => void) => subscribe(IPC.ON_STATUS_CHANGED, cb),
   onCaptureAdded: (cb: (i: CaptureItem) => void) => subscribe(IPC.ON_CAPTURE_ADDED, cb),
   onSettingsChanged: (cb: (s: AppSettings) => void) => subscribe(IPC.ON_SETTINGS_CHANGED, cb),
-  onItemRemoved: (cb: (id: string) => void) => subscribe(IPC.ON_ITEM_REMOVED, cb)
+  onItemRemoved: (cb: (id: string) => void) => subscribe(IPC.ON_ITEM_REMOVED, cb),
+  onLicenseChanged: (cb: (s: LicenseStatus) => void) => subscribe(IPC.ON_LICENSE_CHANGED, cb)
 }
 
 /** Overlay window listens for flash events here. */

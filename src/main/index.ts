@@ -32,6 +32,17 @@ function registerIpc(c: AppController): void {
   ipcMain.handle(IPC.EXPORT_SESSION, (_e, options: ExportOptions) => c.exportSession(options))
   ipcMain.handle(IPC.OPEN_SAVE_DIR, () => shell.openPath(c.session.getRawDir()))
   ipcMain.handle(IPC.OPEN_PATH, (_e, p: string) => shell.openPath(p))
+  ipcMain.handle(IPC.GET_LICENSE, () => c.license.status())
+  ipcMain.handle(IPC.ACTIVATE_LICENSE, (_e, key: string) => {
+    const res = c.license.activate(key)
+    if (res.ok) c.windows.getPanel()?.webContents.send(IPC.ON_LICENSE_CHANGED, res.status)
+    return res
+  })
+  ipcMain.handle(IPC.DEACTIVATE_LICENSE, () => {
+    const status = c.license.deactivate()
+    c.windows.getPanel()?.webContents.send(IPC.ON_LICENSE_CHANGED, status)
+    return status
+  })
   ipcMain.handle(IPC.LIST_PROFILES, () => c.listProfiles())
   ipcMain.handle(IPC.SAVE_PROFILE, (_e, name: string) => c.saveProfile(name))
   ipcMain.handle(IPC.APPLY_PROFILE, (_e, name: string) => c.applyProfile(name))

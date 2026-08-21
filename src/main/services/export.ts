@@ -26,9 +26,37 @@ function stepLabel(item: CaptureItem, i: number, numbering: boolean, captions: b
   return [num, cap].filter(Boolean).join(' ').trim() || `Step ${i + 1}`
 }
 
+/** Watermark composited onto free-plan exports (Pro removes it). */
+async function applyWatermark(flat: {
+  buffer: Buffer
+  width: number
+  height: number
+}): Promise<{ buffer: Buffer; width: number; height: number }> {
+  const text = 'Made with Capture Recording'
+  const fontSize = Math.max(13, Math.round(flat.width * 0.014))
+  const padX = Math.round(fontSize * 0.9)
+  const pillW = Math.round(text.length * fontSize * 0.52) + padX * 2
+  const pillH = Math.round(fontSize * 2)
+  const margin = Math.round(fontSize * 0.9)
+  const x = Math.max(0, flat.width - pillW - margin)
+  const y = Math.max(0, flat.height - pillH - margin)
+  const svg =
+    `<svg width="${flat.width}" height="${flat.height}" xmlns="http://www.w3.org/2000/svg">` +
+    `<rect x="${x}" y="${y}" width="${pillW}" height="${pillH}" rx="${pillH / 2}" fill="#000" fill-opacity="0.45"/>` +
+    `<text x="${x + pillW / 2}" y="${y + pillH / 2 + fontSize * 0.35}" text-anchor="middle" ` +
+    `font-family="Segoe UI, Arial, sans-serif" font-size="${fontSize}" fill="#fff" fill-opacity="0.95">${text}</text>` +
+    `</svg>`
+  const buffer = await sharp(flat.buffer)
+    .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
+    .png()
+    .toBuffer()
+  return { buffer, width: flat.width, height: flat.height }
+}
+
 export async function exportSession(
   items: CaptureItem[],
-  opts: ExportOptions
+  opts: ExportOptions,
+  branding?: { watermark: boolean }
 ): Promise<ExportResult> {
   const files: string[] = []
   try {
@@ -40,7 +68,11 @@ export async function exportSession(
 
     const flats: Flat[] = []
     for (const item of visible) {
-      flats.push({ item, ...(await flattenItem(item)) })
+      // Watermark is applied to the flattened image, so every downstream
+      // format (images, PDF, HTML assets, DOCX, PPTX) inherits it.
+      let flat = await flattenItem(item)
+      if (branding?.watermark) flat = await applyWatermark(flat)
+      flats.push({ item, ...flat })
     }
 
     const wantImages = opts.formats.includes('png') || opts.formats.includes('jpg')

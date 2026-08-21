@@ -33,6 +33,13 @@ export interface ExportResult {
   error?: string
 }
 
+/** Pro license state (offline-verified signed key; free = no valid key). */
+export interface LicenseStatus {
+  plan: 'free' | 'pro'
+  email?: string
+  issuedAt?: string
+}
+
 export type CaptureMode = 'fullscreen' | 'window' | 'element' | 'cursor'
 export type CaptureTrigger = 'click' | 'text-commit' | 'manual' | 'key'
 export type OutputFormat = 'png' | 'jpg' | 'webp'

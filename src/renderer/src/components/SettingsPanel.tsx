@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AppSettings, CaptureMode, Language, OutputFormat, Theme } from '@shared/types'
+import type {
+  AppSettings,
+  CaptureMode,
+  Language,
+  LicenseStatus,
+  OutputFormat,
+  Theme
+} from '@shared/types'
 
 interface Props {
   settings: AppSettings
@@ -89,10 +96,29 @@ export function SettingsPanel({ settings, onChange }: Props): JSX.Element {
   const [profiles, setProfiles] = useState<string[]>([])
   const [profileName, setProfileName] = useState('')
   const [newExclusion, setNewExclusion] = useState('')
+  const [license, setLicense] = useState<LicenseStatus | null>(null)
+  const [licenseKey, setLicenseKey] = useState('')
+  const [licenseError, setLicenseError] = useState(false)
 
   useEffect(() => {
     void window.api.listProfiles().then(setProfiles)
+    void window.api.getLicense().then(setLicense)
+    return window.api.onLicenseChanged(setLicense)
   }, [])
+
+  const activateLicense = async (): Promise<void> => {
+    const key = licenseKey.trim()
+    if (!key) return
+    const res = await window.api.activateLicense(key)
+    setLicense(res.status)
+    setLicenseError(!res.ok)
+    if (res.ok) setLicenseKey('')
+  }
+
+  const deactivateLicense = async (): Promise<void> => {
+    setLicense(await window.api.deactivateLicense())
+    setLicenseError(false)
+  }
 
   const saveProfile = async (): Promise<void> => {
     if (!profileName.trim()) return
@@ -117,6 +143,49 @@ export function SettingsPanel({ settings, onChange }: Props): JSX.Element {
 
   return (
     <section className="settings">
+      <div className="group">
+        <h3>{t('settings.license')}</h3>
+        <div className="field">
+          <span>{t('settings.licensePlan')}</span>
+          <span className={`plan-badge ${license?.plan === 'pro' ? 'pro' : 'free'}`}>
+            {license?.plan === 'pro' ? t('settings.licenseStatusPro') : t('settings.licenseStatusFree')}
+          </span>
+        </div>
+        {license?.plan === 'pro' ? (
+          <>
+            <div className="field">
+              <span>{t('settings.licenseHolder')}</span>
+              <span className="mono">{license.email}</span>
+            </div>
+            <div className="inline-add">
+              <button className="btn sm ghost" onClick={deactivateLicense}>
+                {t('settings.licenseDeactivate')}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="hint-line">{t('settings.licenseFreeNote')}</p>
+            <div className="inline-add">
+              <input
+                type="text"
+                className="mono"
+                placeholder={t('settings.licenseKeyPlaceholder')}
+                value={licenseKey}
+                onChange={(e) => {
+                  setLicenseKey(e.target.value)
+                  setLicenseError(false)
+                }}
+              />
+              <button className="btn sm" disabled={!licenseKey.trim()} onClick={activateLicense}>
+                {t('settings.licenseActivate')}
+              </button>
+            </div>
+            {licenseError && <p className="license-error">{t('settings.licenseInvalid')}</p>}
+          </>
+        )}
+      </div>
+
       <div className="group">
         <h3>{t('settings.profiles')}</h3>
         <div className="field">

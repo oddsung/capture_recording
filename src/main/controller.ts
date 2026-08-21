@@ -13,6 +13,7 @@ import type {
 import { IPC } from '@shared/ipc'
 import { SettingsStore } from './services/settings'
 import { SessionStore } from './services/session'
+import { LicenseService } from './services/license'
 import { CaptureService, displayPhysicalRect } from './services/capture'
 import { similarity } from './services/phash'
 import { exportSession } from './services/export'
@@ -57,6 +58,7 @@ function sameElement(a: HelperElement | null | undefined, b: HelperElement | nul
 
 export class AppController {
   readonly settings = new SettingsStore()
+  readonly license = new LicenseService()
   readonly session: SessionStore
   private readonly capture: CaptureService
   private readonly hook: GlobalHookService
@@ -196,7 +198,23 @@ export class AppController {
   }
 
   exportSession(options: ExportOptions): Promise<ExportResult> {
-    return exportSession(this.session.list(), options)
+    // Free/Pro gate (enforced here in main, not just in the UI): free exports
+    // are limited to plain images and carry a watermark. CR_SMOKE bypasses the
+    // gate so the headless pipeline test keeps covering every exporter.
+    const pro = this.license.isPro() || process.env.CR_SMOKE === '1'
+    const formats = pro
+      ? options.formats
+      : options.formats.filter((f) => f === 'png' || f === 'jpg')
+    if (formats.length === 0) {
+      return Promise.resolve({
+        ok: false,
+        outDir: options.outDir,
+        files: [],
+        count: 0,
+        error: 'pro-required'
+      })
+    }
+    return exportSession(this.session.list(), { ...options, formats }, { watermark: !pro })
   }
 
   async getRaw(id: string): Promise<{ dataUrl: string; width: number; height: number } | null> {

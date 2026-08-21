@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AppSettings, ExportFormat, ExportResult } from '@shared/types'
 
@@ -9,6 +9,8 @@ interface Props {
 }
 
 const ALL_FORMATS: ExportFormat[] = ['png', 'jpg', 'pdf', 'html', 'md', 'docx', 'pptx']
+/** Formats available on the free plan; the rest are Pro-only. */
+const FREE_FORMATS: ExportFormat[] = ['png', 'jpg']
 
 function defaultFormats(s: AppSettings): ExportFormat[] {
   const f: ExportFormat[] = []
@@ -22,13 +24,31 @@ function defaultFormats(s: AppSettings): ExportFormat[] {
 export function ExportModal({ settings, count, onClose }: Props): JSX.Element {
   const { t } = useTranslation()
   const [formats, setFormats] = useState<Set<ExportFormat>>(new Set(defaultFormats(settings)))
+  const [pro, setPro] = useState(true) // optimistic; resolved on mount
   const [numbering, setNumbering] = useState(true)
   const [captions, setCaptions] = useState(true)
   const [outDir, setOutDir] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<ExportResult | null>(null)
 
+  useEffect(() => {
+    void window.api.getLicense().then((lic) => {
+      const isPro = lic.plan === 'pro'
+      setPro(isPro)
+      if (!isPro) {
+        // Drop Pro-only formats from the preselection.
+        setFormats((prev) => {
+          const next = new Set([...prev].filter((f) => FREE_FORMATS.includes(f)))
+          return next.size ? next : new Set<ExportFormat>(['png'])
+        })
+      }
+    })
+  }, [])
+
+  const locked = (f: ExportFormat): boolean => !pro && !FREE_FORMATS.includes(f)
+
   const toggle = (f: ExportFormat): void => {
+    if (locked(f)) return
     setFormats((prev) => {
       const next = new Set(prev)
       if (next.has(f)) next.delete(f)
@@ -68,12 +88,23 @@ export function ExportModal({ settings, count, onClose }: Props): JSX.Element {
           <div className="field-label">{t('export.formats')}</div>
           <div className="format-grid">
             {ALL_FORMATS.map((f) => (
-              <label key={f} className={`fmt ${formats.has(f) ? 'on' : ''}`}>
-                <input type="checkbox" checked={formats.has(f)} onChange={() => toggle(f)} />
+              <label
+                key={f}
+                className={`fmt ${formats.has(f) ? 'on' : ''} ${locked(f) ? 'locked' : ''}`}
+                title={locked(f) ? t('export.proOnly') : undefined}
+              >
+                <input
+                  type="checkbox"
+                  checked={formats.has(f)}
+                  disabled={locked(f)}
+                  onChange={() => toggle(f)}
+                />
                 {t(`export.fmt.${f}`)}
+                {locked(f) && <span className="pro-chip">Pro</span>}
               </label>
             ))}
           </div>
+          {!pro && <p className="watermark-note">{t('export.freeNote')}</p>}
 
           <div className="opt-row">
             <label className="chk">

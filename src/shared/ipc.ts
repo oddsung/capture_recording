@@ -1,6 +1,13 @@
 /** IPC channel names and the typed API shape exposed to the renderer. */
 
-import type { AppSettings, CaptureItem, CaptureStatus, ExportOptions, ExportResult } from './types'
+import type {
+  AppSettings,
+  CaptureItem,
+  CaptureStatus,
+  ExportOptions,
+  ExportResult,
+  LicenseStatus
+} from './types'
 
 export const IPC = {
   // renderer -> main (invoke)
@@ -27,13 +34,17 @@ export const IPC = {
   SAVE_PROFILE: 'profiles:save',
   APPLY_PROFILE: 'profiles:apply',
   DELETE_PROFILE: 'profiles:delete',
+  GET_LICENSE: 'license:get',
+  ACTIVATE_LICENSE: 'license:activate',
+  DEACTIVATE_LICENSE: 'license:deactivate',
 
   // main -> renderer (send)
   ON_STATUS_CHANGED: 'evt:statusChanged',
   ON_CAPTURE_ADDED: 'evt:captureAdded',
   ON_CAPTURE_FLASH: 'evt:captureFlash', // to overlay window
   ON_SETTINGS_CHANGED: 'evt:settingsChanged',
-  ON_ITEM_REMOVED: 'evt:itemRemoved'
+  ON_ITEM_REMOVED: 'evt:itemRemoved',
+  ON_LICENSE_CHANGED: 'evt:licenseChanged'
 } as const
 
 /** Shape of the API bridged through preload as `window.api`. */
@@ -61,9 +72,13 @@ export interface CaptureApi {
   saveProfile(name: string): Promise<string[]>
   applyProfile(name: string): Promise<AppSettings | undefined>
   deleteProfile(name: string): Promise<string[]>
+  getLicense(): Promise<LicenseStatus>
+  activateLicense(key: string): Promise<{ ok: boolean; status: LicenseStatus }>
+  deactivateLicense(): Promise<LicenseStatus>
 
   onStatusChanged(cb: (status: CaptureStatus) => void): () => void
   onCaptureAdded(cb: (item: CaptureItem) => void): () => void
   onSettingsChanged(cb: (settings: AppSettings) => void): () => void
   onItemRemoved(cb: (id: string) => void): () => void
+  onLicenseChanged(cb: (status: LicenseStatus) => void): () => void
 }

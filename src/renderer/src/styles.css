@@ -700,6 +700,50 @@ body {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
+.fmt.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.pro-chip {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.watermark-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Settings ▸ License */
+.plan-badge {
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 3px 12px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.plan-badge.pro {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.hint-line {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.license-error {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--accent);
+}
 .opt-row {
   display: flex;
   gap: 18px;

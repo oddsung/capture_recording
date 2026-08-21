@@ -102,6 +102,29 @@
 3. 📄 **웹사이트**: 판매 시작 시점부터 필수. 지금은 GitHub Releases → 판매 시 정적 랜딩+MoR
    체크아웃 → 성장기 문서/SEO. 선결 과제: 코드사이닝(SmartScreen).
 
+## 수익화 실행 (2026-08-21 확정: 무료판+일시결제 Pro ₩39,000, 평생 업데이트, 내보내기 게이트)
+
+**Phase 1 — 라이선스 인프라 (구현 완료, 미커밋)**
+
+- 오프라인 Ed25519 서명 키: `CR1.<payloadB64url>.<sigB64url>`, 서명은 payload 문자열 바이트에
+  직접(정규화 문제 없음). [src/main/services/license.ts](src/main/services/license.ts) —
+  `verifyLicenseKey()` + `LicenseService`(electron-store 'license'에 키 보관, activate/deactivate)
+- **개인키: `C:\Users\doosung.oh\.capture-recording-keys\private.pem` — 저장소 밖. 백업 필수!**
+  공개키는 license.ts에 임베드. 발급: `node scripts/license-issue.mjs <email>`
+- IPC: license:get/activate/deactivate + evt:licenseChanged. 설정 화면 최상단 라이선스 섹션
+  (플랜 배지, 키 입력/활성화, 해제). 크립토 라운드트립·변조 거부 검증 완료
+
+**Phase 2 — 내보내기 게이트 (구현 완료, 미커밋)**
+
+- main에서 강제([controller.ts](src/main/controller.ts) `exportSession`): 무료 = PNG/JPG만 +
+  워터마크("Made with Capture Recording" 필, flatten 직후 합성이라 전 포맷 상속), Pro = 전 포맷 +
+  워터마크 없음. `CR_SMOKE=1`은 게이트 우회(파이프라인 테스트 보전)
+- ExportModal: Pro 전용 포맷 잠금 표시(Pro 칩) + 무료판 워터마크 안내. 워터마크 렌더링 시각 검증 완료
+
+**Phase 3 (남음)**: MoR 가입(Paddle/Lemon Squeezy, 한국 판매자 자격 확인) → 상품 등록 →
+웹훅으로 키 자동 발급 or 수동 발급 운영 → 랜딩 페이지(구매 버튼). 제품 영문명·도메인 결정 필요
+**Phase 4 (남음)**: 코드사이닝(OV or Azure Trusted Signing) → electron-updater + GitHub Releases
+
 ## 남은 작업 / 다음 단계
 
 1. **실사용 검증 (첫 클릭 박스)**: 녹화 시작 → Chrome에서 첫 클릭 → 갤러리 썸네일에 붉은 박스 확인
