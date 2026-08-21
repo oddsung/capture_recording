@@ -65,6 +65,7 @@ export class AppController {
   readonly windows = new WindowManager()
   private readonly tray: TrayManager
   private status: CaptureStatus = 'idle'
+  private quitting = false
   // Captures are processed one-at-a-time (never dropped). Frames are frozen at
   // press time, so deferring the heavy image work keeps each image correct.
   private captureQueue: Promise<void> = Promise.resolve()
@@ -111,6 +112,7 @@ export class AppController {
     this.session.load() // crash recovery
     this.windows.createControlPanel()
     this.windows.createOverlay()
+    this.windows.createHud()
     this.tray.create()
     this.helper.start()
     this.hotkeys.refresh()
@@ -223,6 +225,10 @@ export class AppController {
     this.hook.start()
     this.warmUpHelper()
     this.setStatus('recording')
+    // Get out of the way while recording: hide the panel, show the small HUD
+    // (rec indicator + pause/stop + hotkey hint) instead.
+    this.windows.hidePanel()
+    this.windows.showHud()
     return this.status
   }
 
@@ -239,9 +245,13 @@ export class AppController {
   }
 
   stop(): CaptureStatus {
+    const wasActive = this.status !== 'idle'
     this.hook.stop()
     this.resetEditState()
     this.setStatus('idle')
+    this.windows.hideHud()
+    // Bring the panel back when a recording session ends (but never mid-quit).
+    if (wasActive && !this.quitting) this.windows.showPanel()
     return this.status
   }
 
@@ -293,6 +303,7 @@ export class AppController {
   }
 
   shutdown(): void {
+    this.quitting = true
     this.stop()
     this.hotkeys.dispose()
     this.helper.dispose()
@@ -304,6 +315,7 @@ export class AppController {
   private handlePress(rawPhys: Point): void {
     if (this.status !== 'recording') return
     const dip = toDip(rawPhys)
+    if (this.windows.isPointOnOwnUi(dip)) return // our HUD/panel — never capture
     this.pendingPress = {
       point: rawPhys,
       at: Date.now(),
@@ -325,13 +337,23 @@ export class AppController {
 
   private handleClick(rawPhys: Point): void {
     if (this.status !== 'recording') return
+    if (this.windows.isPointOnOwnUi(toDip(rawPhys))) {
+      this.pendingPress = null // our HUD/panel — never capture
+      return
+    }
     void (async () => {
       const dipPoint = toDip(rawPhys)
       // Prefer the frame + element captured on mousedown (pre-navigation); the
       // click only commits it. Fall back to grabbing now if there's no press.
       const pp = this.takePendingPress(rawPhys)
       const frame = pp ? await pp.frame : await this.grabFrame(dipPoint)
-      const query = pp ? await pp.query : await this.helper.query(rawPhys.x, rawPhys.y)
+      let query = pp ? await pp.query : await this.helper.query(rawPhys.x, rawPhys.y)
+      // Cold-start retry: the press-time query can time out (sidecar JIT, lazy
+      // Chromium a11y tree). The frame is already frozen, so one more attempt
+      // costs only latency — never correctness.
+      if (!query && this.helper.isAvailable()) {
+        query = await this.helper.query(rawPhys.x, rawPhys.y, 1000)
+      }
 
       if (this.settings.get().triggers.textCommit && this.editDirty && this.activeEdit) {
         const movedAway = !sameElement(query?.element, this.activeEdit.element)
@@ -470,6 +492,7 @@ export class AppController {
   private setStatus(status: CaptureStatus): void {
     this.status = status
     this.windows.getPanel()?.webContents.send(IPC.ON_STATUS_CHANGED, status)
+    this.windows.getHud()?.webContents.send(IPC.ON_STATUS_CHANGED, status)
     this.tray.refresh()
   }
 }

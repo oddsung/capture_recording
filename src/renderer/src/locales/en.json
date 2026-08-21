@@ -10,6 +10,14 @@
     "manual": "Capture now",
     "hint": "Press Start, then work normally — every click is captured automatically."
   },
+  "hud": {
+    "recording": "Recording",
+    "paused": "Paused",
+    "pause": "Pause",
+    "resume": "Resume",
+    "stop": "Stop",
+    "stopHint": "{{key}} to stop"
+  },
   "gallery": {
     "title": "Captures",
     "empty": "No captures yet. Press Start and click around.",
@@ -19,6 +27,7 @@
     "openFolder": "Open folder",
     "delete": "Delete",
     "duplicate": "Duplicate",
+    "reorderHint": "Drag a card's bottom bar (number · title) to reorder steps — numbering updates automatically. Click the image to open the editor.",
     "cleanDuplicates": "Clean duplicates ({{count}})",
     "export": "Export",
     "confirmClear": "Delete all captures in this session?"

@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { BrowserWindow, screen, shell } from 'electron'
 import { is } from '@electron-toolkit/utils'
-import type { Rect } from '@shared/types'
+import type { Point, Rect } from '@shared/types'
 
 const iconPath = join(__dirname, '../../resources/icon.png')
 
@@ -19,6 +19,7 @@ function loadEntry(win: BrowserWindow, htmlFile: string): void {
 export class WindowManager {
   private panel: BrowserWindow | null = null
   private overlay: BrowserWindow | null = null
+  private hud: BrowserWindow | null = null
 
   createControlPanel(): BrowserWindow {
     const win = new BrowserWindow({
@@ -91,12 +92,60 @@ export class WindowManager {
     return win
   }
 
+  /**
+   * Small always-on-top recording HUD (rec indicator + pause/stop + hotkey hint).
+   * Content-protected so it never appears in captures; NOT click-through — its
+   * buttons work, but the controller skips capture triggers landing on it.
+   */
+  createHud(): BrowserWindow {
+    const wa = screen.getPrimaryDisplay().workArea
+    const width = 460
+    const height = 52
+    const win = new BrowserWindow({
+      x: Math.round(wa.x + (wa.width - width) / 2),
+      y: wa.y + 12,
+      width,
+      height,
+      show: false,
+      frame: false,
+      transparent: true,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      skipTaskbar: true,
+      focusable: false, // clicks work, but never steals focus from the recorded app
+      hasShadow: false,
+      alwaysOnTop: true,
+      fullscreenable: false,
+      webPreferences: {
+        preload: join(__dirname, '../preload/index.js'),
+        sandbox: false,
+        contextIsolation: true
+      }
+    })
+
+    win.setAlwaysOnTop(true, 'screen-saver')
+    win.setContentProtection(true) // the HUD must never appear in captures
+    win.setVisibleOnAllWorkspaces(true)
+
+    loadEntry(win, 'hud.html')
+    this.hud = win
+    win.on('closed', () => {
+      this.hud = null
+    })
+    return win
+  }
+
   getPanel(): BrowserWindow | null {
     return this.panel
   }
 
   getOverlay(): BrowserWindow | null {
     return this.overlay
+  }
+
+  getHud(): BrowserWindow | null {
+    return this.hud
   }
 
   showPanel(): void {
@@ -107,6 +156,30 @@ export class WindowManager {
     if (this.panel.isMinimized()) this.panel.restore()
     this.panel.show()
     this.panel.focus()
+  }
+
+  hidePanel(): void {
+    this.panel?.hide()
+  }
+
+  showHud(): void {
+    if (!this.hud) this.createHud()
+    this.hud?.showInactive()
+    this.hud?.moveTop()
+  }
+
+  hideHud(): void {
+    this.hud?.hide()
+  }
+
+  /** True if a DIP point lands on one of our visible interactive windows (HUD/panel). */
+  isPointOnOwnUi(dip: Point): boolean {
+    const hit = (win: BrowserWindow | null): boolean => {
+      if (!win || win.isDestroyed() || !win.isVisible()) return false
+      const b = win.getBounds()
+      return dip.x >= b.x && dip.x < b.x + b.width && dip.y >= b.y && dip.y < b.y + b.height
+    }
+    return hit(this.hud) || hit(this.panel)
   }
 
   /** Reposition the overlay to the target display, then make it visible on top. */

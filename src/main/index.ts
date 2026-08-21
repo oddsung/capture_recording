@@ -37,9 +37,10 @@ function registerIpc(c: AppController): void {
   ipcMain.handle(IPC.APPLY_PROFILE, (_e, name: string) => c.applyProfile(name))
   ipcMain.handle(IPC.DELETE_PROFILE, (_e, name: string) => c.deleteProfile(name))
 
-  // Broadcast settings changes to the renderer.
+  // Broadcast settings changes to the renderers.
   c.settings.onChange((settings) => {
     c.windows.getPanel()?.webContents.send(IPC.ON_SETTINGS_CHANGED, settings)
+    c.windows.getHud()?.webContents.send(IPC.ON_SETTINGS_CHANGED, settings)
   })
 }
 

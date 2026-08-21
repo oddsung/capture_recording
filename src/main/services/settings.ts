@@ -1,6 +1,16 @@
+import { app } from 'electron'
 import Store from 'electron-store'
 import type { AppSettings } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/defaults'
+
+/** UI language matching the OS locale (first-run default; user can change it). */
+function systemLanguage(): AppSettings['language'] {
+  try {
+    return app.getLocale().toLowerCase().startsWith('ko') ? 'ko' : 'en'
+  } catch {
+    return DEFAULT_SETTINGS.language
+  }
+}
 
 type Listener = (settings: AppSettings) => void
 
@@ -26,18 +36,21 @@ export class SettingsStore {
   private store: Store<AppSettings>
   private profiles: Store<{ profiles: Record<string, AppSettings> }>
   private listeners = new Set<Listener>()
+  // OS-locale-aware defaults: only ever applied where no persisted value exists,
+  // so a user's explicit language choice always survives restarts.
+  private readonly defaults: AppSettings = { ...DEFAULT_SETTINGS, language: systemLanguage() }
 
   constructor() {
     this.store = new Store<AppSettings>({
       name: 'settings',
-      defaults: DEFAULT_SETTINGS
+      defaults: this.defaults
     })
     this.profiles = new Store<{ profiles: Record<string, AppSettings> }>({
       name: 'profiles',
       defaults: { profiles: {} }
     })
     // Backfill any keys added in newer versions.
-    this.store.store = deepMerge(DEFAULT_SETTINGS, this.store.store)
+    this.store.store = deepMerge(this.defaults, this.store.store)
   }
 
   // ---- profiles (named setting presets) ----
@@ -56,7 +69,7 @@ export class SettingsStore {
   applyProfile(name: string): AppSettings | undefined {
     const saved = this.profiles.get('profiles')[name]
     if (!saved) return undefined
-    const merged = deepMerge(DEFAULT_SETTINGS, saved)
+    const merged = deepMerge(this.defaults, saved)
     this.store.store = merged
     this.emit(merged)
     return merged

@@ -40,6 +40,9 @@ function makeFileBase(pattern: string, ctx: { index: number; seq: number; id: st
   return out || timestamp
 }
 
+/** Side (DIP) of the fallback click marker drawn when no UI element resolves. */
+const FALLBACK_MARKER_DIP = 36
+
 /** Physical-pixel rect of a display in the global desktop coordinate space. */
 export function displayPhysicalRect(display: Display): Rect {
   const s = screen as unknown as { dipToScreenRect?: (w: null, r: Rect) => Rect }
@@ -176,6 +179,19 @@ export class CaptureService {
     let borderInCrop: Rect | null = null
     if (el && !isEmptyRect(el)) {
       const inter = intersectRect(el, crop)
+      if (!isEmptyRect(inter)) borderInCrop = translateRect(inter, -crop.x, -crop.y)
+    }
+
+    // Fallback marker: no element resolved (query timed out / empty) — still
+    // annotate a fixed-size box around the click point so the click location
+    // is always visible in the gallery/export.
+    if (!borderInCrop && trigger === 'click') {
+      const side = FALLBACK_MARKER_DIP * (display.scaleFactor || 1)
+      const marker = clampRect(
+        toBase({ x: physPoint.x - side / 2, y: physPoint.y - side / 2, width: side, height: side }),
+        baseBounds
+      )
+      const inter = intersectRect(marker, crop)
       if (!isEmptyRect(inter)) borderInCrop = translateRect(inter, -crop.x, -crop.y)
     }
 

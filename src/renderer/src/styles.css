@@ -230,6 +230,84 @@ body {
   border-radius: 10px;
   overflow: hidden;
   box-shadow: var(--shadow);
+  position: relative;
+  transition: opacity 0.15s ease;
+}
+.card.dragging {
+  opacity: 0.35;
+}
+/* The caption bar (number + title) is the drag handle — the image stays click-to-edit. */
+.card figcaption {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.card figcaption:hover {
+  background: var(--panel-2);
+}
+.card figcaption:active {
+  cursor: grabbing;
+}
+.card figcaption .del {
+  cursor: pointer;
+}
+/* Drop-position indicator: an accent bar on the edge where the dragged card will land.
+   Drawn inside the card because .card clips overflow. */
+.card.drop-before::before,
+.card.drop-after::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  z-index: 2;
+  pointer-events: none;
+}
+.card.drop-before::before {
+  left: 0;
+}
+.card.drop-after::after {
+  right: 0;
+}
+.reorder-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted, #888);
+}
+/* Floating card that follows the cursor while reordering. */
+.drag-ghost {
+  position: fixed;
+  z-index: 1000;
+  width: 150px;
+  transform: translate(-50%, -85%);
+  pointer-events: none;
+  opacity: 0.92;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.drag-ghost img,
+.drag-ghost .thumb-fallback {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  display: block;
+  background: var(--panel-2);
+}
+.drag-ghost .g-cap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+}
+.drag-ghost .g-cap .cap {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .thumb-wrap {
   position: relative;

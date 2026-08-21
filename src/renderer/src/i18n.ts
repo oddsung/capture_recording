@@ -8,7 +8,9 @@ void i18n.use(initReactI18next).init({
     en: { translation: en },
     ko: { translation: ko }
   },
-  lng: 'ko',
+  // Initial guess from the OS locale; the persisted settings value (also
+  // OS-defaulted on first run, user-changeable) takes over once loaded.
+  lng: navigator.language.toLowerCase().startsWith('ko') ? 'ko' : 'en',
   fallbackLng: 'en',
   interpolation: { escapeValue: false }
 })

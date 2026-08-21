@@ -48,7 +48,9 @@ export default defineConfig({
           // Main control-panel / editor window
           index: resolve('src/renderer/index.html'),
           // Transparent fullscreen capture-feedback overlay window
-          overlay: resolve('src/renderer/overlay.html')
+          overlay: resolve('src/renderer/overlay.html'),
+          // Small always-on-top recording HUD (rec indicator + pause/stop)
+          hud: resolve('src/renderer/hud.html')
         }
       }
     }
