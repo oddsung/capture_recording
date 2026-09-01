@@ -125,6 +125,45 @@
 웹훅으로 키 자동 발급 or 수동 발급 운영 → 랜딩 페이지(구매 버튼). 제품 영문명·도메인 결정 필요
 **Phase 4 (남음)**: 코드사이닝(OV or Azure Trusted Signing) → electron-updater + GitHub Releases
 
+## 출시 준비 개선 3건 + HUD 캡처 버튼 (2026-08-21, 미커밋)
+
+- **HUD 📷 캡처 버튼**: 녹화 중 메인 창이 숨겨져 "지금 캡처" 버튼을 쓸 수 없던 문제 → HUD에
+  추가([hud.tsx](src/renderer/src/hud.tsx)). `controller.manualCapture()`는 커서가 자체 UI 위면
+  UIA 조회를 건너뜀(보이지 않는 HUD 버튼에 테두리가 그려지는 것 방지). HUD 폭 460→540.
+- **제품명**: 웹 조사 결과 StepSnap(Windows 작업기록 도구 등 2개 존재)·ClickTrail·StepCapture·
+  StepCap 모두 기존 제품 있음. **StepTrail**만 소프트웨어 사용 사례 없음(상표·도메인 확인은 별도).
+  결정 전이므로 [src/shared/product.ts](src/shared/product.ts) `PRODUCT_NAME`은 'Capture Recording'
+  유지 — 이름 확정 시 이 상수 한 줄만 바꾸면 기본 폴더·워터마크에 반영.
+- **기본 내보내기 폴더**: `storage.saveDir`(비면 `Documents\<PRODUCT_NAME>`) + 내보내기마다
+  `guide-YYYY-MM-DD_HH-mm` 하위 폴더(덮어쓰기 방지). IPC `export:defaults`, ExportModal이 경로를
+  미리 채움, 설정 ▸ 파일에 "기본 내보내기 폴더" 변경/기본값 UI.
+- **편집기 자르기(영역 선택)**: 비파괴 — `CaptureItem.crop?: Rect|null`(raw px). 편집기 '자르기'
+  도구로 드래그 → 바깥 영역 어둡게, 선택 시 이동/크기 조절, '자르기 해제' 버튼/Delete.
+  `flattenItem()`이 주석을 구운 뒤 crop을 적용하므로 모든 내보내기 포맷·썸네일에 반영.
+  `controller.updateItem()`이 crop/annotations 변경 시 flatten 기반으로 갤러리 썸네일을 재생성
+  (async로 변경, 스모크의 updateItem 호출도 await로 수정).
+  - 2026-09-01: 모서리 앵커 드래그 시 비율이 고정되던 문제 → Konva Transformer 기본값
+    (`keepRatio: true`)이 원인. `keepRatio={false}` + `shiftBehavior="inverted"`(Shift 누르면 비율
+    유지)로 변경. 자르기뿐 아니라 테두리·사각형·형광펜·블러 주석에도 동일 적용.
+
+## 편집기 전면 개편 (2026-09-01, 미커밋) — "다른 편집기 없이도 되게"
+
+그림판 리본 + 캡처 도구 플로팅 툴바를 참고해 [Editor.tsx](src/renderer/src/components/Editor.tsx)
+재작성 (+ [icons.tsx](src/renderer/src/components/icons.tsx) 인라인 SVG 아이콘 세트):
+
+- **새 도구**: 타원(E), 직선(L), 펜/자유곡선(P, 연속 스트로크 유지), 말풍선(Q, 채움 박스+텍스트,
+  배경색 대비로 글자색 자동), 모자이크(K, 픽셀화). 사각형·타원 **채우기** 토글(30% 투명).
+  Annotation 타입에 ellipse/line/pen/mosaic/callout 추가, rect/ellipse에 `fill?`.
+  [flatten.ts](src/main/services/flatten.ts)가 전부 렌더(모자이크는 nearest 축소→확대).
+- **되돌리기/다시 실행**(Ctrl+Z / Ctrl+Y·Shift+Z): 스냅샷 스택(최대 100). 그리기 시작·드래그
+  시작·변형 시작·삭제·색/굵기 변경·텍스트 편집 세션(포커스) 시점에 undo 포인트 기록.
+- **아이콘 툴바**(그룹: 선택 | 도형 | 마스킹 | 텍스트 | 자르기), 단축키 V B R E A L P H M K T Q N C,
+  16색 팔레트 + 사용자 색상(`input type=color`), 컨텍스트 컨트롤(굵기/글자/채우기/블러 강도/셀 크기).
+- **확대/축소**(−/+/맞춤/100%, 캔버스 스크롤), **이미지 복사**(Ctrl+C, 클립보드) / **PNG 저장**
+  (Ctrl+S, 저장 대화상자·기본 위치 = 내보내기 기본 폴더). main: `copyItemImage`/`saveItemImage`
+  — flatten + crop + 무료판 워터마크 적용(내보내기 게이트 우회 방지). `applyWatermark` export.
+- Esc: 선택 해제 → 도구 해제 → 닫기 순. 토스트로 복사/저장 피드백.
+
 ## 남은 작업 / 다음 단계
 
 1. **실사용 검증 (첫 클릭 박스)**: 녹화 시작 → Chrome에서 첫 클릭 → 갤러리 썸네일에 붉은 박스 확인

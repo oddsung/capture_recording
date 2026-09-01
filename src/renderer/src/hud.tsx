@@ -88,6 +88,10 @@ function Hud(): JSX.Element {
     settings?.hotkeys.enabled && settings.hotkeys.startStop
       ? prettyAccel(settings.hotkeys.startStop)
       : null
+  const captureKey =
+    settings?.hotkeys.enabled && settings.hotkeys.manualCapture
+      ? prettyAccel(settings.hotkeys.manualCapture)
+      : null
 
   return (
     <div className="hud">
@@ -95,6 +99,12 @@ function Hud(): JSX.Element {
       <span className="label">{paused ? t('hud.paused') : t('hud.recording')}</span>
       <span className="time">{fmtElapsed(elapsed)}</span>
       <span className="spacer" />
+      <button
+        title={captureKey ? t('hud.captureHint', { key: captureKey }) : t('hud.captureHintNoKey')}
+        onClick={() => window.api.manualCapture()}
+      >
+        📷 {t('hud.capture')}
+      </button>
       {paused ? (
         <button onClick={() => window.api.resume()}>▶ {t('hud.resume')}</button>
       ) : (

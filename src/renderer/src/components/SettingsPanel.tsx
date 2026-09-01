@@ -8,6 +8,7 @@ import type {
   OutputFormat,
   Theme
 } from '@shared/types'
+import { PRODUCT_NAME } from '@shared/product'
 
 interface Props {
   settings: AppSettings
@@ -118,6 +119,17 @@ export function SettingsPanel({ settings, onChange }: Props): JSX.Element {
   const deactivateLicense = async (): Promise<void> => {
     setLicense(await window.api.deactivateLicense())
     setLicenseError(false)
+  }
+
+  // Resolved default export base (Documents\<product>) — refetched when the setting changes.
+  const [exportBase, setExportBase] = useState('')
+  useEffect(() => {
+    void window.api.getExportDefaults().then((d) => setExportBase(d.baseDir))
+  }, [settings.storage.saveDir])
+
+  const pickExportFolder = async (): Promise<void> => {
+    const dir = await window.api.chooseExportDir()
+    if (dir) onChange({ storage: { ...settings.storage, saveDir: dir } })
   }
 
   const saveProfile = async (): Promise<void> => {
@@ -505,6 +517,26 @@ export function SettingsPanel({ settings, onChange }: Props): JSX.Element {
 
       <div className="group">
         <h3>{t('settings.storage')}</h3>
+        <div className="field">
+          <span>{t('settings.exportFolder')}</span>
+        </div>
+        <div className="inline-add">
+          <input type="text" className="mono" readOnly value={settings.storage.saveDir || exportBase} />
+          <button className="btn sm" onClick={pickExportFolder}>
+            {t('settings.exportFolderChange')}
+          </button>
+          {settings.storage.saveDir && (
+            <button
+              className="btn sm ghost"
+              onClick={() => onChange({ storage: { ...settings.storage, saveDir: '' } })}
+            >
+              {t('settings.exportFolderReset')}
+            </button>
+          )}
+        </div>
+        <p className="soon" style={{ marginTop: 0 }}>
+          {t('settings.exportFolderHint', { name: PRODUCT_NAME })}
+        </p>
         <TextField
           label={t('settings.fileNamePattern')}
           mono

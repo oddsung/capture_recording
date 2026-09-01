@@ -588,47 +588,167 @@ body {
   background: var(--panel);
   border-bottom: 1px solid var(--border);
 }
-.editor-tools .tool {
+/* Tool buttons: icon + tiny label, grouped like a ribbon. */
+.tool-group {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
   border: 1px solid var(--border);
+  border-radius: 10px;
   background: var(--panel-2);
+}
+.editor-tools .tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 44px;
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text);
-  padding: 5px 11px;
+  padding: 4px 6px 3px;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
+  line-height: 1;
+}
+.editor-tools .tool:hover {
+  background: var(--panel);
+  border-color: var(--border);
 }
 .editor-tools .tool.active {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
 }
+.editor-tools .tool-label {
+  white-space: nowrap;
+}
 .editor-tools .divider {
   width: 1px;
-  height: 22px;
+  height: 30px;
   background: var(--border);
-  margin: 0 4px;
+  margin: 0 2px;
+}
+/* Color palette: 8 × 2 grid plus a custom-color well. */
+.palette {
+  display: grid;
+  grid-template-columns: repeat(9, 18px);
+  gap: 4px;
 }
 .editor-tools .swatch {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
   border: 2px solid var(--border);
   cursor: pointer;
+  padding: 0;
+  position: relative;
 }
 .editor-tools .swatch.active {
   border-color: var(--text);
-  transform: scale(1.12);
+  box-shadow: 0 0 0 1px var(--panel);
+  transform: scale(1.15);
 }
-.editor-tools .thickness {
-  width: 110px;
+.editor-tools .swatch.custom {
+  grid-row: span 2;
+  height: 40px;
+  border-radius: 6px;
+  background-image: conic-gradient(#f33, #fc0, #3c6, #09f, #93f, #f33);
+  overflow: hidden;
+}
+.editor-tools .swatch.custom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+/* Contextual controls (thickness / font size / fill …). */
+.editor-tools .ctl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.editor-tools .ctl input[type='range'] {
+  width: 96px;
+}
+.editor-tools .ctl.chk {
+  cursor: pointer;
+  color: var(--text);
+}
+/* Small icon buttons in the header (undo/redo, zoom, copy/save, delete). */
+.icon-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel-2);
+}
+.ibtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.ibtn:hover {
+  background: var(--panel);
+}
+.ibtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.ibtn.active {
+  background: var(--accent);
+  color: #fff;
+}
+.ibtn.danger:not(:disabled) {
+  color: var(--danger);
+}
+.zoom-val {
+  min-width: 46px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
 }
 .editor-canvas {
   flex: 1;
   display: grid;
   place-items: center;
-  overflow: hidden;
+  overflow: auto;
+  position: relative;
+  padding: 12px;
   background: repeating-conic-gradient(var(--panel-2) 0% 25%, var(--bg) 0% 50%) 50% / 22px 22px;
+}
+.editor-toast {
+  position: sticky;
+  bottom: 14px;
+  justify-self: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(20, 20, 22, 0.88);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
 }
 .editor-foot {
   padding: 10px 14px;

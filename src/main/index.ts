@@ -28,7 +28,10 @@ function registerIpc(c: AppController): void {
   ipcMain.handle(IPC.REORDER, (_e, ids: string[]) => c.reorder(ids))
   ipcMain.handle(IPC.CLEAN_DUPLICATES, () => c.cleanDuplicates())
   ipcMain.handle(IPC.GET_RAW, (_e, id: string) => c.getRaw(id))
+  ipcMain.handle(IPC.COPY_ITEM_IMAGE, (_e, id: string) => c.copyItemImage(id))
+  ipcMain.handle(IPC.SAVE_ITEM_IMAGE, (_e, id: string) => c.saveItemImage(id))
   ipcMain.handle(IPC.CHOOSE_EXPORT_DIR, () => c.chooseExportDir())
+  ipcMain.handle(IPC.GET_EXPORT_DEFAULTS, () => c.getExportDefaults())
   ipcMain.handle(IPC.EXPORT_SESSION, (_e, options: ExportOptions) => c.exportSession(options))
   ipcMain.handle(IPC.OPEN_SAVE_DIR, () => shell.openPath(c.session.getRawDir()))
   ipcMain.handle(IPC.OPEN_PATH, (_e, p: string) => shell.openPath(p))
@@ -95,7 +98,7 @@ if (!gotLock) {
 
           // updateItem: caption + annotation round-trip.
           const first = items[0]
-          const upd = c.updateItem(first.id, {
+          const upd = await c.updateItem(first.id, {
             caption: '테스트 캡션',
             annotations: [
               ...first.annotations,
@@ -125,7 +128,7 @@ if (!gotLock) {
 
           // ---- M5: flatten + export ----
           const survivor = remaining[0]
-          c.updateItem(survivor.id, {
+          await c.updateItem(survivor.id, {
             annotations: [
               ...survivor.annotations,
               { id: 't1', kind: 'text', at: { x: 60, y: 60 }, text: '한글 주석', color: '#0a84ff', fontSize: 40 },

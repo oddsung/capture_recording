@@ -1,6 +1,10 @@
 import { promises as fs } from 'node:fs'
-import { join } from 'node:path'
-import { app, dialog, screen } from 'electron'
+import { dirname, join } from 'node:path'
+import { app, clipboard, dialog, nativeImage, screen } from 'electron'
+import sharp from 'sharp'
+import { PRODUCT_NAME } from '@shared/product'
+import { flattenItem } from './services/flatten'
+import { applyWatermark } from './services/export'
 import type {
   CaptureItem,
   CaptureStatus,
@@ -175,8 +179,71 @@ export class AppController {
 
   // ---- editor / session operations (IPC) ----
 
-  updateItem(id: string, patch: Partial<CaptureItem>): CaptureItem | undefined {
-    return this.session.updateItem(id, patch)
+  async updateItem(id: string, patch: Partial<CaptureItem>): Promise<CaptureItem | undefined> {
+    const item = this.session.updateItem(id, patch)
+    if (!item) return undefined
+    // Edits that change the rendered output (annotations, crop) refresh the
+    // gallery thumbnail from the flattened image — the raw file stays untouched.
+    if ('crop' in patch || 'annotations' in patch) {
+      try {
+        const flat = await flattenItem(item)
+        const thumb = await sharp(flat.buffer)
+          .resize({ width: Math.min(400, flat.width), withoutEnlargement: true })
+          .jpeg({ quality: 72 })
+          .toBuffer()
+        return this.session.updateItem(id, {
+          thumbnailDataUrl: `data:image/jpeg;base64,${thumb.toString('base64')}`
+        })
+      } catch (err) {
+        console.error('[thumbnail] refresh failed:', err)
+      }
+    }
+    return item
+  }
+
+  /** One step, fully rendered (annotations + crop; free plan gets the watermark like any export). */
+  private async renderItemImage(id: string): Promise<Buffer | null> {
+    const item = this.session.getById(id)
+    if (!item) return null
+    let flat = await flattenItem(item)
+    if (!this.license.isPro()) flat = await applyWatermark(flat)
+    return flat.buffer
+  }
+
+  async copyItemImage(id: string): Promise<boolean> {
+    const buf = await this.renderItemImage(id)
+    if (!buf) return false
+    clipboard.writeImage(nativeImage.createFromBuffer(buf))
+    return true
+  }
+
+  async saveItemImage(id: string): Promise<string | null> {
+    const item = this.session.getById(id)
+    const buf = await this.renderItemImage(id)
+    if (!item || !buf) return null
+    const { baseDir } = this.getExportDefaults()
+    const opts: Electron.SaveDialogOptions = {
+      defaultPath: join(baseDir, `step-${String(item.index || 1).padStart(2, '0')}.png`),
+      filters: [{ name: 'PNG', extensions: ['png'] }]
+    }
+    const panel = this.windows.getPanel()
+    const res = panel ? await dialog.showSaveDialog(panel, opts) : await dialog.showSaveDialog(opts)
+    if (res.canceled || !res.filePath) return null
+    await fs.mkdir(dirname(res.filePath), { recursive: true })
+    await fs.writeFile(res.filePath, buf)
+    return res.filePath
+  }
+
+  /** Export location defaults: storage.saveDir (or Documents\<product>) + a timestamped subfolder. */
+  getExportDefaults(): { baseDir: string; suggestedDir: string } {
+    const saveDir = this.settings.get().storage.saveDir.trim()
+    const baseDir = saveDir || join(app.getPath('documents'), PRODUCT_NAME)
+    const d = new Date()
+    const p = (n: number): string => String(n).padStart(2, '0')
+    const stamp =
+      `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_` +
+      `${p(d.getHours())}-${p(d.getMinutes())}`
+    return { baseDir, suggestedDir: join(baseDir, `guide-${stamp}`) }
   }
 
   reorder(ids: string[]): CaptureItem[] {
@@ -288,7 +355,11 @@ export class AppController {
   async manualCapture(): Promise<void> {
     const dip = screen.getCursorScreenPoint()
     const phys = toPhysical(dip)
-    const query = await this.helper.query(phys.x, phys.y)
+    // Triggered from our own HUD/panel: the element under the cursor would be our
+    // (content-protected, invisible-in-capture) window — never draw a border there.
+    const query = this.windows.isPointOnOwnUi(dip)
+      ? null
+      : await this.helper.query(phys.x, phys.y)
     await this.doCapture(phys, dip, 'manual', query)
     await this.captureQueue // wait for the queued work to finish
   }

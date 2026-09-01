@@ -5,6 +5,7 @@ import { PDFDocument } from 'pdf-lib'
 import { Document, Packer, Paragraph, TextRun, ImageRun, HeadingLevel } from 'docx'
 import pptxgen from 'pptxgenjs'
 import type { CaptureItem, ExportOptions, ExportResult } from '@shared/types'
+import { PRODUCT_NAME } from '@shared/product'
 import { flattenItem, composeStepImage } from './flatten'
 
 interface Flat {
@@ -27,12 +28,12 @@ function stepLabel(item: CaptureItem, i: number, numbering: boolean, captions: b
 }
 
 /** Watermark composited onto free-plan exports (Pro removes it). */
-async function applyWatermark(flat: {
+export async function applyWatermark(flat: {
   buffer: Buffer
   width: number
   height: number
 }): Promise<{ buffer: Buffer; width: number; height: number }> {
-  const text = 'Made with Capture Recording'
+  const text = `Made with ${PRODUCT_NAME}`
   const fontSize = Math.max(13, Math.round(flat.width * 0.014))
   const padX = Math.round(fontSize * 0.9)
   const pillW = Math.round(text.length * fontSize * 0.52) + padX * 2

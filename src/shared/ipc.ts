@@ -26,7 +26,10 @@ export const IPC = {
   REORDER: 'session:reorder',
   CLEAN_DUPLICATES: 'session:cleanDuplicates',
   GET_RAW: 'session:getRaw',
+  COPY_ITEM_IMAGE: 'item:copyImage',
+  SAVE_ITEM_IMAGE: 'item:saveImage',
   CHOOSE_EXPORT_DIR: 'export:chooseDir',
+  GET_EXPORT_DEFAULTS: 'export:defaults',
   EXPORT_SESSION: 'export:run',
   OPEN_SAVE_DIR: 'shell:openSaveDir',
   OPEN_PATH: 'shell:openPath',
@@ -64,7 +67,13 @@ export interface CaptureApi {
   reorder(ids: string[]): Promise<CaptureItem[]>
   cleanDuplicates(): Promise<CaptureItem[]>
   getRaw(id: string): Promise<{ dataUrl: string; width: number; height: number } | null>
+  /** Flattened step image (annotations + crop, free-plan watermark) → clipboard. */
+  copyItemImage(id: string): Promise<boolean>
+  /** Flattened step image → PNG via save dialog; resolves to the path or null if cancelled. */
+  saveItemImage(id: string): Promise<string | null>
   chooseExportDir(): Promise<string | null>
+  /** Default export location: base = storage.saveDir or Documents\<product>; suggested = base + timestamped subfolder. */
+  getExportDefaults(): Promise<{ baseDir: string; suggestedDir: string }>
   exportSession(options: ExportOptions): Promise<ExportResult>
   openSaveDir(): Promise<void>
   openPath(path: string): Promise<void>

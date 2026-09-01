@@ -22,11 +22,56 @@ function buildVectorSvg(annotations: Annotation[], w: number, h: number): string
       case 'border':
       case 'rect': {
         const inset = a.thickness / 2
+        const fill = a.kind === 'rect' && a.fill ? `fill="${a.fill}" fill-opacity="0.3"` : 'fill="none"'
         parts.push(
           `<rect x="${a.rect.x + inset}" y="${a.rect.y + inset}" ` +
             `width="${Math.max(0, a.rect.width - a.thickness)}" height="${Math.max(0, a.rect.height - a.thickness)}" ` +
-            `rx="${a.kind === 'border' ? a.radius : 0}" fill="none" stroke="${a.color}" stroke-width="${a.thickness}"/>`
+            `rx="${a.kind === 'border' ? a.radius : 0}" ${fill} stroke="${a.color}" stroke-width="${a.thickness}"/>`
         )
+        break
+      }
+      case 'ellipse': {
+        const inset = a.thickness / 2
+        const rx = Math.max(0, a.rect.width / 2 - inset)
+        const ry = Math.max(0, a.rect.height / 2 - inset)
+        const fill = a.fill ? `fill="${a.fill}" fill-opacity="0.3"` : 'fill="none"'
+        parts.push(
+          `<ellipse cx="${a.rect.x + a.rect.width / 2}" cy="${a.rect.y + a.rect.height / 2}" rx="${rx}" ry="${ry}" ` +
+            `${fill} stroke="${a.color}" stroke-width="${a.thickness}"/>`
+        )
+        break
+      }
+      case 'line':
+        parts.push(
+          `<line x1="${a.from.x}" y1="${a.from.y}" x2="${a.to.x}" y2="${a.to.y}" ` +
+            `stroke="${a.color}" stroke-width="${a.thickness}" stroke-linecap="round"/>`
+        )
+        break
+      case 'pen': {
+        const pts: string[] = []
+        for (let i = 0; i + 1 < a.points.length; i += 2) pts.push(`${a.points[i]},${a.points[i + 1]}`)
+        if (pts.length >= 2) {
+          parts.push(
+            `<polyline points="${pts.join(' ')}" fill="none" stroke="${a.color}" ` +
+              `stroke-width="${a.thickness}" stroke-linecap="round" stroke-linejoin="round"/>`
+          )
+        }
+        break
+      }
+      case 'callout': {
+        const pad = a.fontSize * 0.5
+        const lineH = a.fontSize * 1.25
+        parts.push(
+          `<rect x="${a.rect.x}" y="${a.rect.y}" width="${a.rect.width}" height="${a.rect.height}" rx="${a.fontSize * 0.4}" ` +
+            `fill="${a.fill}" fill-opacity="0.92"/>`
+        )
+        const lines = a.text.split('\n')
+        lines.forEach((ln, i) => {
+          parts.push(
+            `<text x="${a.rect.x + pad}" y="${a.rect.y + pad + a.fontSize * 0.85 + i * lineH}" font-family="${FONT}" ` +
+              `font-size="${a.fontSize}" font-weight="bold" fill="${a.color}">${escapeXml(ln)}</text>`
+          )
+        })
         break
       }
       case 'highlight':
@@ -86,20 +131,47 @@ export async function flattenItem(item: CaptureItem): Promise<{
 
   const composites: sharp.OverlayOptions[] = []
   for (const a of item.annotations) {
-    if (a.kind !== 'blur') continue
+    if (a.kind !== 'blur' && a.kind !== 'mosaic') continue
     const r = roundRect(clampRect(a.rect, bounds))
     if (isEmptyRect(r)) continue
-    const sigma = Math.min(1000, Math.max(0.3, a.intensity || 8))
-    const region = await sharp(raw)
-      .extract({ left: r.x, top: r.y, width: r.width, height: r.height })
-      .blur(sigma)
-      .png()
-      .toBuffer()
+    const extract = { left: r.x, top: r.y, width: r.width, height: r.height }
+    let region: Buffer
+    if (a.kind === 'blur') {
+      const sigma = Math.min(1000, Math.max(0.3, a.intensity || 8))
+      region = await sharp(raw).extract(extract).blur(sigma).png().toBuffer()
+    } else {
+      // Pixelate: shrink to one pixel per cell, then scale back up without smoothing.
+      const cell = Math.max(2, Math.round(a.size || 12))
+      const sw = Math.max(1, Math.round(r.width / cell))
+      const sh = Math.max(1, Math.round(r.height / cell))
+      const small = await sharp(raw)
+        .extract(extract)
+        .resize(sw, sh, { kernel: 'nearest', fit: 'fill' })
+        .png()
+        .toBuffer()
+      region = await sharp(small)
+        .resize(r.width, r.height, { kernel: 'nearest', fit: 'fill' })
+        .png()
+        .toBuffer()
+    }
     composites.push({ input: region, left: r.x, top: r.y })
   }
 
   composites.push({ input: Buffer.from(buildVectorSvg(item.annotations, w, h)), top: 0, left: 0 })
-  const buffer = await sharp(raw).composite(composites).png().toBuffer()
+  let buffer = await sharp(raw).composite(composites).png().toBuffer()
+
+  // Non-destructive crop: annotations live in full-image coordinates, so the
+  // crop is applied AFTER they are baked in. The raw file is never touched.
+  if (item.crop) {
+    const c = roundRect(clampRect(item.crop, bounds))
+    if (!isEmptyRect(c) && (c.width < w || c.height < h)) {
+      buffer = await sharp(buffer)
+        .extract({ left: c.x, top: c.y, width: c.width, height: c.height })
+        .png()
+        .toBuffer()
+      return { buffer, width: c.width, height: c.height }
+    }
+  }
   return { buffer, width: w, height: h }
 }
 

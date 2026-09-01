@@ -99,7 +99,7 @@ export class WindowManager {
    */
   createHud(): BrowserWindow {
     const wa = screen.getPrimaryDisplay().workArea
-    const width = 460
+    const width = 540
     const height = 52
     const win = new BrowserWindow({
       x: Math.round(wa.x + (wa.width - width) / 2),

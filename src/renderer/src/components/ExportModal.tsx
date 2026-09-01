@@ -32,6 +32,8 @@ export function ExportModal({ settings, count, onClose }: Props): JSX.Element {
   const [result, setResult] = useState<ExportResult | null>(null)
 
   useEffect(() => {
+    // Prefill the destination: <base>/guide-<timestamp> (base = settings or Documents\<product>).
+    void window.api.getExportDefaults().then((d) => setOutDir((cur) => cur ?? d.suggestedDir))
     void window.api.getLicense().then((lic) => {
       const isPro = lic.plan === 'pro'
       setPro(isPro)

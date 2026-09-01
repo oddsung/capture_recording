@@ -57,11 +57,19 @@ export interface ElementInfo {
 /** A non-destructive annotation layer drawn on top of the raw image (M4). */
 export type Annotation =
   | { id: string; kind: 'border'; rect: Rect; color: string; thickness: number; radius: number }
-  | { id: string; kind: 'rect'; rect: Rect; color: string; thickness: number }
+  | { id: string; kind: 'rect'; rect: Rect; color: string; thickness: number; fill?: string }
+  | { id: string; kind: 'ellipse'; rect: Rect; color: string; thickness: number; fill?: string }
   | { id: string; kind: 'arrow'; from: Point; to: Point; color: string; thickness: number }
+  | { id: string; kind: 'line'; from: Point; to: Point; color: string; thickness: number }
+  /** Freehand stroke; points are flat [x0, y0, x1, y1, …] in image px. */
+  | { id: string; kind: 'pen'; points: number[]; color: string; thickness: number }
   | { id: string; kind: 'highlight'; rect: Rect; color: string; opacity: number }
   | { id: string; kind: 'blur'; rect: Rect; intensity: number }
+  /** Pixelation; `size` is the cell size in image px. */
+  | { id: string; kind: 'mosaic'; rect: Rect; size: number }
   | { id: string; kind: 'text'; at: Point; text: string; color: string; fontSize: number }
+  /** Speech-bubble style text box: filled rounded rect with text inside. */
+  | { id: string; kind: 'callout'; rect: Rect; text: string; color: string; fill: string; fontSize: number }
   | { id: string; kind: 'badge'; at: Point; label: string; color: string }
 
 /** One captured step. Display image = rawImage + rendered annotation layers. */
@@ -80,6 +88,8 @@ export interface CaptureItem {
   element?: ElementInfo
   caption?: string
   annotations: Annotation[]
+  /** Non-destructive output crop in raw-image px; null/undefined = full image. */
+  crop?: Rect | null
   flagged?: 'duplicate' | 'deleted'
   pHash?: string
 }
@@ -163,7 +173,7 @@ export interface AppSettings {
 
   // Storage
   storage: {
-    saveDir: string // '' = default userData/sessions
+    saveDir: string // export base folder; '' = Documents\<PRODUCT_NAME>
     fileNamePattern: string
     autoSaveSec: number
   }
