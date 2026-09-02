@@ -83,13 +83,16 @@ export class CaptureService {
    * Grab a screenshot at `physPoint`, applying the configured capture mode using
    * the UIA element/window geometry. Saves a CLEAN raw image (non-destructive)
    * plus a `border` annotation; the gallery thumbnail shows the composited border.
+   * `region` (physical px, global) is the fixed recording area chosen at start:
+   * when given it overrides the capture mode so every step has the same frame.
    */
   async capture(
     physPoint: Point,
     dipPoint: Point,
     trigger: CaptureTrigger,
     query: ElementQueryResult | null,
-    pregrab?: { buffer: Buffer; dp: Rect }
+    pregrab?: { buffer: Buffer; dp: Rect },
+    region?: Rect
   ): Promise<CaptureItem | null> {
     const s = this.settings.get()
     const display = screen.getDisplayNearestPoint(dipPoint)
@@ -155,7 +158,11 @@ export class CaptureService {
     // Resolve crop region + effective mode (graceful degradation).
     let mode: CaptureMode = s.capture.mode
     let crop: Rect = baseBounds
-    if (mode === 'element') {
+    const regionBase = region ? clampRect(toBase(region), baseBounds) : null
+    if (regionBase && !isEmptyRect(regionBase)) {
+      crop = regionBase
+      mode = 'region'
+    } else if (mode === 'element') {
       if (el && !isEmptyRect(el)) {
         crop = clampRect(expandRect(el, s.capture.elementPadding), baseBounds)
       } else if (winBase && !isEmptyRect(winBase)) {

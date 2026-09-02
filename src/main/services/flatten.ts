@@ -1,9 +1,41 @@
 import { promises as fs } from 'node:fs'
 import sharp from 'sharp'
 import type { Annotation, CaptureItem } from '@shared/types'
+import { ARROW_HEAD, PEN_TENSION } from '@shared/annotationStyle'
 import { clampRect, isEmptyRect, roundRect } from './geometry'
 
 const FONT = 'Malgun Gothic, Arial, sans-serif'
+
+/**
+ * SVG path for a freehand stroke, smoothed exactly like Konva's open `Line`
+ * with `tension` (Catmull-Rom-style control points), so the export matches
+ * what the editor shows.
+ */
+function penPath(p: number[]): string {
+  const len = p.length
+  if (len < 4) return ''
+  const f = (v: number): string => String(Math.round(v * 100) / 100)
+  const straight = `M${f(p[0])},${f(p[1])} L${f(p[len - 2])},${f(p[len - 1])}`
+  if (len === 4) return straight
+  // Per interior point: [cp1x, cp1y, px, py, cp2x, cp2y]
+  const tp: number[] = []
+  for (let n = 2; n < len - 2; n += 2) {
+    const x0 = p[n - 2], y0 = p[n - 1], x1 = p[n], y1 = p[n + 1], x2 = p[n + 2], y2 = p[n + 3]
+    const d01 = Math.hypot(x1 - x0, y1 - y0)
+    const d12 = Math.hypot(x2 - x1, y2 - y1)
+    if (d01 + d12 === 0) continue // duplicate points (Konva skips NaN control points)
+    const fa = (PEN_TENSION * d01) / (d01 + d12)
+    const fb = (PEN_TENSION * d12) / (d01 + d12)
+    tp.push(x1 - fa * (x2 - x0), y1 - fa * (y2 - y0), x1, y1, x1 + fb * (x2 - x0), y1 + fb * (y2 - y0))
+  }
+  if (tp.length === 0) return straight
+  let d = `M${f(p[0])},${f(p[1])} Q${f(tp[0])},${f(tp[1])} ${f(tp[2])},${f(tp[3])}`
+  for (let n = 4; n < tp.length - 2; n += 6) {
+    d += ` C${f(tp[n])},${f(tp[n + 1])} ${f(tp[n + 2])},${f(tp[n + 3])} ${f(tp[n + 4])},${f(tp[n + 5])}`
+  }
+  d += ` Q${f(tp[tp.length - 2])},${f(tp[tp.length - 1])} ${f(p[len - 2])},${f(p[len - 1])}`
+  return d
+}
 
 function escapeXml(s: string): string {
   return s
@@ -48,11 +80,10 @@ function buildVectorSvg(annotations: Annotation[], w: number, h: number): string
         )
         break
       case 'pen': {
-        const pts: string[] = []
-        for (let i = 0; i + 1 < a.points.length; i += 2) pts.push(`${a.points[i]},${a.points[i + 1]}`)
-        if (pts.length >= 2) {
+        const d = penPath(a.points)
+        if (d) {
           parts.push(
-            `<polyline points="${pts.join(' ')}" fill="none" stroke="${a.color}" ` +
+            `<path d="${d}" fill="none" stroke="${a.color}" ` +
               `stroke-width="${a.thickness}" stroke-linecap="round" stroke-linejoin="round"/>`
           )
         }
@@ -81,10 +112,12 @@ function buildVectorSvg(annotations: Annotation[], w: number, h: number): string
         )
         break
       case 'arrow': {
+        // Mirrors the editor's Konva Arrow: shaft runs to the tip; the head is a
+        // filled AND stroked triangle (pointerLength = pointerWidth = ARROW_HEAD × thickness).
         const { from, to, color, thickness } = a
         const ang = Math.atan2(to.y - from.y, to.x - from.x)
-        const hl = thickness * 3
-        const hw = thickness * 2.2
+        const hl = thickness * ARROW_HEAD
+        const hw = (thickness * ARROW_HEAD) / 2
         const bx = to.x - hl * Math.cos(ang)
         const by = to.y - hl * Math.sin(ang)
         const p1x = bx + hw * Math.sin(ang)
@@ -92,9 +125,12 @@ function buildVectorSvg(annotations: Annotation[], w: number, h: number): string
         const p2x = bx - hw * Math.sin(ang)
         const p2y = by + hw * Math.cos(ang)
         parts.push(
-          `<line x1="${from.x}" y1="${from.y}" x2="${bx}" y2="${by}" stroke="${color}" stroke-width="${thickness}" stroke-linecap="round"/>`
+          `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="${color}" stroke-width="${thickness}" stroke-linecap="round"/>`
         )
-        parts.push(`<polygon points="${to.x},${to.y} ${p1x},${p1y} ${p2x},${p2y}" fill="${color}"/>`)
+        parts.push(
+          `<polygon points="${to.x},${to.y} ${p1x},${p1y} ${p2x},${p2y}" fill="${color}" ` +
+            `stroke="${color}" stroke-width="${thickness}" stroke-linejoin="miter"/>`
+        )
         break
       }
       case 'text':

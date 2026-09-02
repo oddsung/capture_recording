@@ -100,6 +100,7 @@ export default function App(): JSX.Element {
           <ControlBar
             status={status}
             onStart={() => window.api.start()}
+            onStartRegion={() => window.api.startWithRegion()}
             onStop={() => window.api.stop()}
             onPause={() => window.api.pause()}
             onResume={() => window.api.resume()}

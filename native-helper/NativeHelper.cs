@@ -15,6 +15,9 @@
 //   <-  {"id":2,"ok":true,"element":{"x":..,"y":..,"w":..,"h":..,"controlType":"Button",
 //         "name":"Save","editable":false},"window":{"x":..,"y":..,"w":..,"h":..,"process":"notepad"}}
 //   <-  {"id":2,"ok":false,"error":"..."}
+//   ->  {"id":3,"cmd":"listWindows","excludePid":1234}
+//   <-  {"id":3,"ok":true,"windows":[{"x":..,"y":..,"w":..,"h":..,"title":"..","process":".."},...]}
+//        (visible top-level windows, front-to-back z-order; used by the recording-area picker)
 //
 // All coordinates are PHYSICAL pixels (process is Per-Monitor-V2 DPI aware), matching
 // the raw coordinates reported by the global mouse hook on the Electron side.
@@ -73,6 +76,8 @@ internal static class NativeHelper
                 return ElementFromPoint(id, x, y);
             case "focusedElement":
                 return FocusedElement(id);
+            case "listWindows":
+                return ListWindows(id, ExtractInt(line, "excludePid") ?? 0);
             case "capture":
                 return CaptureScreen(
                     id,
@@ -135,6 +140,55 @@ internal static class NativeHelper
         {
             return "{\"id\":" + id + ",\"ok\":false,\"error\":" + Esc(ex.Message) + "}";
         }
+    }
+
+    /** Visible top-level app windows, front-to-back, with their real (DWM) frame bounds. */
+    private static string ListWindows(int id, int excludePid)
+    {
+        var sb = new StringBuilder();
+        sb.Append("{\"id\":").Append(id).Append(",\"ok\":true,\"windows\":[");
+        bool first = true;
+        EnumWindowsProc cb = delegate(IntPtr hwnd, IntPtr lParam)
+        {
+            try
+            {
+                if (!IsWindowVisible(hwnd) || IsIconic(hwnd)) return true;
+                if ((GetWindowLong(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0) return true;
+                int cloaked;
+                if (DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out cloaked, sizeof(int)) == 0 && cloaked != 0) return true;
+                int len = GetWindowTextLength(hwnd);
+                if (len <= 0) return true;
+                var cls = new StringBuilder(64);
+                GetClassName(hwnd, cls, cls.Capacity);
+                string c = cls.ToString();
+                // Desktop / shell surfaces are not "windows" the user would pick.
+                if (c == "Progman" || c == "WorkerW" || c == "Shell_TrayWnd" || c == "Shell_SecondaryTrayWnd") return true;
+                uint pid;
+                GetWindowThreadProcessId(hwnd, out pid);
+                if (excludePid != 0 && pid == (uint)excludePid) return true;
+                RECT rc;
+                // Extended frame bounds exclude the invisible resize borders of framed windows.
+                if (DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out rc, Marshal.SizeOf(typeof(RECT))) != 0
+                    && !GetWindowRect(hwnd, out rc)) return true;
+                int w = rc.Right - rc.Left, h = rc.Bottom - rc.Top;
+                if (w <= 0 || h <= 0) return true;
+                var title = new StringBuilder(len + 1);
+                GetWindowText(hwnd, title, title.Capacity);
+                string proc = "";
+                try { proc = Process.GetProcessById((int)pid).ProcessName; } catch { }
+                if (!first) sb.Append(',');
+                first = false;
+                sb.Append("{\"x\":").Append(rc.Left).Append(",\"y\":").Append(rc.Top)
+                  .Append(",\"w\":").Append(w).Append(",\"h\":").Append(h)
+                  .Append(",\"title\":").Append(Esc(title.ToString()))
+                  .Append(",\"process\":").Append(Esc(proc)).Append("}");
+            }
+            catch { }
+            return true;
+        };
+        EnumWindows(cb, IntPtr.Zero);
+        sb.Append("]}");
+        return sb.ToString();
     }
 
     private static string BuildResponse(int id, AutomationElement el, int winX, int winY)
@@ -283,6 +337,22 @@ internal static class NativeHelper
     private struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 
     private const uint GA_ROOT = 2;
+    private const int GWL_EXSTYLE = -20;
+    private const int WS_EX_TOOLWINDOW = 0x00000080;
+    private const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+    private const int DWMWA_CLOAKED = 14;
+
+    private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int index);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowTextLength(IntPtr hwnd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder text, int max);
+    [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out RECT value, int size);
+    [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out int value, int size);
 
     [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(POINT p);
     [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);

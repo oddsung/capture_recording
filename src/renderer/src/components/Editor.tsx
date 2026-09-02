@@ -15,6 +15,7 @@ import {
 } from 'react-konva'
 import type Konva from 'konva'
 import type { Annotation, CaptureItem, Rect as RectShape } from '@shared/types'
+import { ARROW_HEAD, PEN_TENSION } from '@shared/annotationStyle'
 import { useImage } from '../hooks/useImage'
 import { Icon } from './icons'
 
@@ -557,8 +558,9 @@ export function Editor({ item, index, total, onPrev, onNext, onClose, onSaved }:
             stroke={a.color}
             fill={a.color}
             strokeWidth={a.thickness}
-            pointerLength={a.thickness * 2.5}
-            pointerWidth={a.thickness * 2.5}
+            lineCap="round"
+            pointerLength={a.thickness * ARROW_HEAD}
+            pointerWidth={a.thickness * ARROW_HEAD}
             hitStrokeWidth={Math.max(14, a.thickness)}
             {...common}
             onDragEnd={onDragEnd}
@@ -583,7 +585,7 @@ export function Editor({ item, index, total, onPrev, onNext, onClose, onSaved }:
             points={a.points}
             stroke={a.color}
             strokeWidth={a.thickness}
-            tension={0.35}
+            tension={PEN_TENSION}
             lineCap="round"
             lineJoin="round"
             hitStrokeWidth={Math.max(16, a.thickness)}

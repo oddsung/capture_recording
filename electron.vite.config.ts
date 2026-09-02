@@ -50,7 +50,9 @@ export default defineConfig({
           // Transparent fullscreen capture-feedback overlay window
           overlay: resolve('src/renderer/overlay.html'),
           // Small always-on-top recording HUD (rec indicator + pause/stop)
-          hud: resolve('src/renderer/hud.html')
+          hud: resolve('src/renderer/hud.html'),
+          // Recording-area picker (one transparent window per display)
+          picker: resolve('src/renderer/picker.html')
         }
       }
     }

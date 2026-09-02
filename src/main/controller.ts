@@ -11,8 +11,10 @@ import type {
   CaptureTrigger,
   ExportOptions,
   ExportResult,
+  PickerInfo,
   Point,
-  Rect
+  Rect,
+  RegionPick
 } from '@shared/types'
 import { IPC } from '@shared/ipc'
 import { SettingsStore } from './services/settings'
@@ -48,6 +50,31 @@ function toPhysical(dip: Point): Point {
   return dip
 }
 
+/** Convert a DIP rect to raw OS (physical) pixels (Windows). */
+function toPhysicalRect(dip: Rect): Rect {
+  const s = screen as unknown as { dipToScreenRect?: (w: null, r: Rect) => Rect }
+  if (typeof s.dipToScreenRect === 'function') return s.dipToScreenRect(null, dip)
+  return dip
+}
+
+/** Convert a raw OS (physical) rect to DIP (Windows). */
+function toDipRect(phys: Rect): Rect {
+  const s = screen as unknown as { screenToDipRect?: (w: null, r: Rect) => Rect }
+  if (typeof s.screenToDipRect === 'function') return s.screenToDipRect(null, phys)
+  return phys
+}
+
+function containsPoint(r: Rect, p: Point): boolean {
+  return p.x >= r.x && p.x < r.x + r.width && p.y >= r.y && p.y < r.y + r.height
+}
+
+/** Fixed recording area for the current session (chosen in the picker at start). */
+interface ActiveRegion {
+  phys: Rect // physical px, global — what the capture pipeline crops to
+  dip: Rect // DIP, global — for the on-screen frame
+  displayId: number
+}
+
 function sameElement(a: HelperElement | null | undefined, b: HelperElement | null | undefined): boolean {
   if (!a || !b) return false
   return (
@@ -72,6 +99,10 @@ export class AppController {
   private readonly tray: TrayManager
   private status: CaptureStatus = 'idle'
   private quitting = false
+  // Fixed recording area (null = whole screen / per-click capture mode).
+  private activeRegion: ActiveRegion | null = null
+  // In-flight recording-area pick, resolved by the picker windows via IPC.
+  private pick: { resolve: (r: RegionPick) => void } | null = null
   // Captures are processed one-at-a-time (never dropped). Frames are frozen at
   // press time, so deferring the heavy image work keeps each image correct.
   private captureQueue: Promise<void> = Promise.resolve()
@@ -222,6 +253,8 @@ export class AppController {
     const buf = await this.renderItemImage(id)
     if (!item || !buf) return null
     const { baseDir } = this.getExportDefaults()
+    // The dialog silently ignores a defaultPath whose folder doesn't exist yet.
+    await fs.mkdir(baseDir, { recursive: true }).catch(() => {})
     const opts: Electron.SaveDialogOptions = {
       defaultPath: join(baseDir, `step-${String(item.index || 1).padStart(2, '0')}.png`),
       filters: [{ name: 'PNG', extensions: ['png'] }]
@@ -307,6 +340,7 @@ export class AppController {
 
   start(): CaptureStatus {
     if (this.status === 'recording') return this.status
+    if (this.pick) this.pickerDone({ kind: 'cancel' }) // started via hotkey/tray while picking
     this.hook.start()
     this.warmUpHelper()
     this.setStatus('recording')
@@ -314,7 +348,91 @@ export class AppController {
     // (rec indicator + pause/stop + hotkey hint) instead.
     this.windows.hidePanel()
     this.windows.showHud()
+    this.syncRegionFrame()
     return this.status
+  }
+
+  // ---- fixed recording area ("pick area & start") ----
+
+  /**
+   * Let the user choose a fixed recording area (drag a rectangle / click a
+   * window / Enter for the whole screen), then start. Every capture of the
+   * session is cropped to that area and clicks outside it are ignored, so all
+   * steps share one frame — no per-step cropping afterwards.
+   */
+  async startWithRegion(): Promise<CaptureStatus> {
+    if (this.status !== 'idle' || this.pick) return this.status
+    this.windows.hidePanel()
+    const result = await new Promise<RegionPick>((resolve) => {
+      this.pick = { resolve }
+      this.windows.openPickers(() => this.pickerDone({ kind: 'cancel' }))
+    })
+    this.pick = null
+    this.windows.closePickers()
+    if (this.status !== 'idle') return this.status // started meanwhile (hotkey/tray)
+    if (result.kind === 'cancel') {
+      this.windows.showPanel()
+      return this.status
+    }
+    this.activeRegion = result.kind === 'rect' ? this.resolveRegion(result) : null
+    return this.start()
+  }
+
+  /** Picker window → geometry of its display + snap-able windows (all DIP, global). */
+  async pickerInfo(displayId: number): Promise<PickerInfo> {
+    const display = this.displayById(displayId)
+    const wins = this.helper.isAvailable() ? await this.helper.listWindows(process.pid) : []
+    return {
+      display: { ...display.bounds, id: display.id, scaleFactor: display.scaleFactor },
+      windows: wins.map((w) => ({ rect: toDipRect(w.bounds), title: w.title, process: w.process })),
+      language: this.settings.get().language
+    }
+  }
+
+  /** Picker window → main: the user's choice (or cancel). */
+  pickerDone(result: RegionPick): void {
+    this.pick?.resolve(result)
+  }
+
+  private displayById(id: number): Electron.Display {
+    return screen.getAllDisplays().find((d) => d.id === id) ?? screen.getPrimaryDisplay()
+  }
+
+  /** Display-relative DIP rect from the picker → clamped, rounded, physical-mapped region. */
+  private resolveRegion(pick: { displayId: number; rect: Rect }): ActiveRegion | null {
+    const display = this.displayById(pick.displayId)
+    const b = display.bounds
+    const x0 = Math.max(b.x, Math.round(b.x + pick.rect.x))
+    const y0 = Math.max(b.y, Math.round(b.y + pick.rect.y))
+    const x1 = Math.min(b.x + b.width, Math.round(b.x + pick.rect.x + pick.rect.width))
+    const y1 = Math.min(b.y + b.height, Math.round(b.y + pick.rect.y + pick.rect.height))
+    const dip: Rect = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
+    if (dip.width < 16 || dip.height < 16) return null
+    return { phys: toPhysicalRect(dip), dip, displayId: display.id }
+  }
+
+  /** True if a physical point is inside the recording area (always true without one). */
+  private inRegion(phys: Point): boolean {
+    return !this.activeRegion || containsPoint(this.activeRegion.phys, phys)
+  }
+
+  /** Show/hide the on-screen frame marking the recording area (overlay window, never captured). */
+  private syncRegionFrame(): void {
+    const overlay = this.windows.getOverlay()
+    if (!overlay) return
+    const r = this.activeRegion
+    if (!r) {
+      overlay.webContents.send(IPC.ON_REGION_CHANGED, null)
+      return
+    }
+    const b = this.displayById(r.displayId).bounds
+    this.windows.positionOverlayOn(b)
+    overlay.webContents.send(IPC.ON_REGION_CHANGED, {
+      x: r.dip.x - b.x,
+      y: r.dip.y - b.y,
+      width: r.dip.width,
+      height: r.dip.height
+    })
   }
 
   /**
@@ -335,6 +453,10 @@ export class AppController {
     this.resetEditState()
     this.setStatus('idle')
     this.windows.hideHud()
+    if (this.activeRegion) {
+      this.activeRegion = null // the area is per-session; queued captures keep their own copy
+      this.syncRegionFrame()
+    }
     // Bring the panel back when a recording session ends (but never mid-quit).
     if (wasActive && !this.quitting) this.windows.showPanel()
     return this.status
@@ -353,13 +475,21 @@ export class AppController {
   }
 
   async manualCapture(): Promise<void> {
-    const dip = screen.getCursorScreenPoint()
-    const phys = toPhysical(dip)
+    const cursorDip = screen.getCursorScreenPoint()
+    const cursorPhys = toPhysical(cursorDip)
     // Triggered from our own HUD/panel: the element under the cursor would be our
     // (content-protected, invisible-in-capture) window — never draw a border there.
-    const query = this.windows.isPointOnOwnUi(dip)
-      ? null
-      : await this.helper.query(phys.x, phys.y)
+    // Likewise outside a fixed recording area the cursor is irrelevant.
+    const useCursor = !this.windows.isPointOnOwnUi(cursorDip) && this.inRegion(cursorPhys)
+    const query = useCursor ? await this.helper.query(cursorPhys.x, cursorPhys.y) : null
+    let dip = cursorDip
+    let phys = cursorPhys
+    const region = this.activeRegion
+    if (region && !useCursor) {
+      // Anchor on the area itself so the grab targets the right display.
+      dip = { x: region.dip.x + region.dip.width / 2, y: region.dip.y + region.dip.height / 2 }
+      phys = toPhysical(dip)
+    }
     await this.doCapture(phys, dip, 'manual', query)
     await this.captureQueue // wait for the queued work to finish
   }
@@ -393,6 +523,8 @@ export class AppController {
 
   shutdown(): void {
     this.quitting = true
+    if (this.pick) this.pickerDone({ kind: 'cancel' })
+    this.windows.closePickers()
     this.stop()
     this.hotkeys.dispose()
     this.helper.dispose()
@@ -404,7 +536,8 @@ export class AppController {
   private handlePress(rawPhys: Point): void {
     if (this.status !== 'recording') return
     const dip = toDip(rawPhys)
-    if (this.windows.isPointOnOwnUi(dip)) return // our HUD/panel — never capture
+    // Our HUD/panel, or outside the fixed recording area — never capture.
+    if (this.windows.isPointOnOwnUi(dip) || !this.inRegion(rawPhys)) return
     this.pendingPress = {
       point: rawPhys,
       at: Date.now(),
@@ -426,8 +559,8 @@ export class AppController {
 
   private handleClick(rawPhys: Point): void {
     if (this.status !== 'recording') return
-    if (this.windows.isPointOnOwnUi(toDip(rawPhys))) {
-      this.pendingPress = null // our HUD/panel — never capture
+    if (this.windows.isPointOnOwnUi(toDip(rawPhys)) || !this.inRegion(rawPhys)) {
+      this.pendingPress = null // our HUD/panel or outside the recording area — never capture
       return
     }
     void (async () => {
@@ -495,6 +628,7 @@ export class AppController {
       x: el.bounds.x + el.bounds.width / 2,
       y: el.bounds.y + el.bounds.height / 2
     }
+    if (!this.inRegion(center)) return // typed outside the recording area
     await this.doCapture(center, toDip(center), 'text-commit', edit)
   }
 
@@ -511,7 +645,12 @@ export class AppController {
 
     // Immediate, consistent feedback — fired on the action, not after the (slower)
     // image processing, so every capture flashes regardless of queue depth.
-    this.flash(screen.getDisplayNearestPoint(dipPoint).bounds)
+    // With a fixed recording area the overlay stays on that area's display.
+    const region = this.activeRegion
+    const fxDisplay = region
+      ? this.displayById(region.displayId)
+      : screen.getDisplayNearestPoint(dipPoint)
+    this.flash(fxDisplay.bounds)
 
     const grabbed = frame !== undefined ? frame : await this.grabFrame(dipPoint)
     // Serialize the heavy work so rapid consecutive clicks are ALL captured
@@ -523,7 +662,8 @@ export class AppController {
           dipPoint,
           trigger,
           query,
-          grabbed ?? undefined
+          grabbed ?? undefined,
+          region?.phys
         )
         if (item) {
           this.flagDuplicate(item)

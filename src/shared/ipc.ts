@@ -6,7 +6,10 @@ import type {
   CaptureStatus,
   ExportOptions,
   ExportResult,
-  LicenseStatus
+  LicenseStatus,
+  PickerInfo,
+  Rect,
+  RegionPick
 } from './types'
 
 export const IPC = {
@@ -15,6 +18,7 @@ export const IPC = {
   UPDATE_SETTINGS: 'settings:update',
   GET_STATUS: 'capture:getStatus',
   START: 'capture:start',
+  START_WITH_REGION: 'capture:startWithRegion',
   STOP: 'capture:stop',
   PAUSE: 'capture:pause',
   RESUME: 'capture:resume',
@@ -40,11 +44,14 @@ export const IPC = {
   GET_LICENSE: 'license:get',
   ACTIVATE_LICENSE: 'license:activate',
   DEACTIVATE_LICENSE: 'license:deactivate',
+  PICKER_INFO: 'picker:info',
+  PICKER_DONE: 'picker:done', // picker window -> main (send)
 
   // main -> renderer (send)
   ON_STATUS_CHANGED: 'evt:statusChanged',
   ON_CAPTURE_ADDED: 'evt:captureAdded',
   ON_CAPTURE_FLASH: 'evt:captureFlash', // to overlay window
+  ON_REGION_CHANGED: 'evt:regionChanged', // to overlay window: recording-area frame (DIP, overlay-relative) or null
   ON_SETTINGS_CHANGED: 'evt:settingsChanged',
   ON_ITEM_REMOVED: 'evt:itemRemoved',
   ON_LICENSE_CHANGED: 'evt:licenseChanged'
@@ -56,6 +63,8 @@ export interface CaptureApi {
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>
   getStatus(): Promise<CaptureStatus>
   start(): Promise<CaptureStatus>
+  /** Open the recording-area picker; starts recording once an area is chosen (idle if cancelled). */
+  startWithRegion(): Promise<CaptureStatus>
   stop(): Promise<CaptureStatus>
   pause(): Promise<CaptureStatus>
   resume(): Promise<CaptureStatus>
@@ -90,4 +99,16 @@ export interface CaptureApi {
   onSettingsChanged(cb: (settings: AppSettings) => void): () => void
   onItemRemoved(cb: (id: string) => void): () => void
   onLicenseChanged(cb: (status: LicenseStatus) => void): () => void
+}
+
+/** Bridged as `window.overlay` in the capture-feedback overlay window. */
+export interface OverlayApi {
+  onFlash(cb: (payload: { flash: boolean; style: string; toast: boolean }) => void): () => void
+  onRegion(cb: (rect: Rect | null) => void): () => void
+}
+
+/** Bridged as `window.picker` in the recording-area picker windows. */
+export interface PickerApi {
+  getInfo(displayId: number): Promise<PickerInfo>
+  done(result: RegionPick): void
 }

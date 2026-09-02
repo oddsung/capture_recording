@@ -8,6 +8,8 @@
     "pause": "일시정지",
     "resume": "재개",
     "manual": "지금 캡처",
+    "startRegion": "영역 지정 후 시작",
+    "startRegionHint": "브라우저 창 등 캡처할 영역을 먼저 정하면 모든 단계가 그 영역 크기로 저장되고, 영역 밖 클릭은 캡처하지 않습니다.",
     "hint": "시작을 누르고 평소처럼 작업하세요 — 클릭할 때마다 자동으로 캡처됩니다."
   },
   "hud": {
@@ -164,11 +166,15 @@
     "exportDefaults": "기본 내보내기 형식"
   },
   "captureMode": {
+    "region": "지정 영역",
     "fullscreen": "전체 화면",
     "window": "활성 창",
     "element": "요소 영역",
     "cursor": "커서 주변",
     "comingSoon": "(M2에서 제공)"
+  },
+  "picker": {
+    "hint": "드래그: 영역 선택  ·  창 클릭: 그 창 크기로 선택  ·  Enter: 전체 화면  ·  Esc: 취소"
   },
   "triggers": {
     "leftClick": "좌클릭 시",

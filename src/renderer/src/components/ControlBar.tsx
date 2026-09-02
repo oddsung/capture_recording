@@ -4,6 +4,7 @@ import type { CaptureStatus } from '@shared/types'
 interface Props {
   status: CaptureStatus
   onStart: () => void
+  onStartRegion: () => void
   onStop: () => void
   onPause: () => void
   onResume: () => void
@@ -13,6 +14,7 @@ interface Props {
 export function ControlBar({
   status,
   onStart,
+  onStartRegion,
   onStop,
   onPause,
   onResume,
@@ -25,9 +27,14 @@ export function ControlBar({
   return (
     <section className="control-bar">
       {status === 'idle' ? (
-        <button className="btn primary big" onClick={onStart}>
-          ● {t('controls.start')}
-        </button>
+        <div className="control-row">
+          <button className="btn primary big" onClick={onStart}>
+            ● {t('controls.start')}
+          </button>
+          <button className="btn big" onClick={onStartRegion} title={t('controls.startRegionHint')}>
+            ▭ {t('controls.startRegion')}
+          </button>
+        </div>
       ) : (
         <button className="btn danger big" onClick={onStop}>
           ■ {t('controls.stop')}

@@ -8,6 +8,8 @@
     "pause": "Pause",
     "resume": "Resume",
     "manual": "Capture now",
+    "startRegion": "Pick area & start",
+    "startRegionHint": "Choose the area to record first (e.g. a browser window): every step is saved at that size and clicks outside it are ignored.",
     "hint": "Press Start, then work normally — every click is captured automatically."
   },
   "hud": {
@@ -164,11 +166,15 @@
     "exportDefaults": "Default export formats"
   },
   "captureMode": {
+    "region": "Region",
     "fullscreen": "Full screen",
     "window": "Active window",
     "element": "Element only",
     "cursor": "Around cursor",
     "comingSoon": "(available in M2)"
+  },
+  "picker": {
+    "hint": "Drag to select an area  ·  Click a window to snap to it  ·  Enter = whole screen  ·  Esc = cancel"
   },
   "triggers": {
     "leftClick": "On left click",

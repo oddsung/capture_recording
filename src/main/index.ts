@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, ipcMain, shell } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
-import type { AppSettings, CaptureItem, ExportOptions } from '@shared/types'
+import type { AppSettings, CaptureItem, ExportOptions, RegionPick } from '@shared/types'
 import { IPC } from '@shared/ipc'
 import { AppController } from './controller'
 
@@ -15,6 +15,9 @@ function registerIpc(c: AppController): void {
   )
   ipcMain.handle(IPC.GET_STATUS, () => c.getStatus())
   ipcMain.handle(IPC.START, () => c.start())
+  ipcMain.handle(IPC.START_WITH_REGION, () => c.startWithRegion())
+  ipcMain.handle(IPC.PICKER_INFO, (_e, displayId: number) => c.pickerInfo(displayId))
+  ipcMain.on(IPC.PICKER_DONE, (_e, result: RegionPick) => c.pickerDone(result))
   ipcMain.handle(IPC.STOP, () => c.stop())
   ipcMain.handle(IPC.PAUSE, () => c.pause())
   ipcMain.handle(IPC.RESUME, () => c.resume())

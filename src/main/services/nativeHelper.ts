@@ -18,6 +18,12 @@ export interface ElementQueryResult {
   element: HelperElement | null
   window: HelperWindow | null
 }
+/** A visible top-level window (recording-area picker snap target). */
+export interface HelperWindowInfo {
+  bounds: Rect // physical px, global
+  title: string
+  process: string
+}
 
 /** Result of a fast GDI screen grab: a temp PNG covering a physical-px rect. */
 export interface CaptureFrame {
@@ -123,6 +129,17 @@ export class NativeHelperClient {
   /** Query the currently focused UIA element (for text-commit detection). */
   async queryFocused(timeoutMs = 500): Promise<ElementQueryResult | null> {
     return mapResult(await this.request({ cmd: 'focusedElement' }, timeoutMs))
+  }
+
+  /** Visible top-level windows, front-to-back z-order (excluding `excludePid`, i.e. our own). */
+  async listWindows(excludePid: number, timeoutMs = 1500): Promise<HelperWindowInfo[]> {
+    const msg = await this.request({ cmd: 'listWindows', excludePid }, timeoutMs)
+    if (!msg?.ok || !Array.isArray(msg.windows)) return []
+    return (msg.windows as Array<RawRect & { title: string; process: string }>).map((w) => ({
+      bounds: toRect(w),
+      title: w.title ?? '',
+      process: w.process ?? ''
+    }))
   }
 
   /** Fast GDI grab of a physical-pixel rect; returns the temp PNG descriptor. */

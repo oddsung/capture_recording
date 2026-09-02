@@ -4,9 +4,11 @@ import type {
   CaptureItem,
   CaptureStatus,
   ExportOptions,
-  LicenseStatus
+  LicenseStatus,
+  Rect,
+  RegionPick
 } from '@shared/types'
-import { IPC, type CaptureApi } from '@shared/ipc'
+import { IPC, type CaptureApi, type OverlayApi, type PickerApi } from '@shared/ipc'
 
 function subscribe<T>(channel: string, cb: (payload: T) => void): () => void {
   const handler = (_e: Electron.IpcRendererEvent, payload: T): void => cb(payload)
@@ -20,6 +22,7 @@ const api: CaptureApi = {
     ipcRenderer.invoke(IPC.UPDATE_SETTINGS, patch),
   getStatus: () => ipcRenderer.invoke(IPC.GET_STATUS),
   start: () => ipcRenderer.invoke(IPC.START),
+  startWithRegion: () => ipcRenderer.invoke(IPC.START_WITH_REGION),
   stop: () => ipcRenderer.invoke(IPC.STOP),
   pause: () => ipcRenderer.invoke(IPC.PAUSE),
   resume: () => ipcRenderer.invoke(IPC.RESUME),
@@ -54,18 +57,27 @@ const api: CaptureApi = {
   onLicenseChanged: (cb: (s: LicenseStatus) => void) => subscribe(IPC.ON_LICENSE_CHANGED, cb)
 }
 
-/** Overlay window listens for flash events here. */
-const overlayApi = {
-  onFlash: (cb: (payload: { flash: boolean; style: string; toast: boolean }) => void) =>
-    subscribe(IPC.ON_CAPTURE_FLASH, cb)
+/** Overlay window listens for flash events + the recording-area frame here. */
+const overlayApi: OverlayApi = {
+  onFlash: (cb) => subscribe(IPC.ON_CAPTURE_FLASH, cb),
+  onRegion: (cb: (rect: Rect | null) => void) => subscribe(IPC.ON_REGION_CHANGED, cb)
+}
+
+/** Recording-area picker windows. */
+const pickerApi: PickerApi = {
+  getInfo: (displayId: number) => ipcRenderer.invoke(IPC.PICKER_INFO, displayId),
+  done: (result: RegionPick) => ipcRenderer.send(IPC.PICKER_DONE, result)
 }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('api', api)
   contextBridge.exposeInMainWorld('overlay', overlayApi)
+  contextBridge.exposeInMainWorld('picker', pickerApi)
 } else {
   // @ts-ignore fallback when context isolation is disabled
   window.api = api
   // @ts-ignore
   window.overlay = overlayApi
+  // @ts-ignore
+  window.picker = pickerApi
 }

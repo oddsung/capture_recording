@@ -40,7 +40,8 @@ export interface LicenseStatus {
   issuedAt?: string
 }
 
-export type CaptureMode = 'fullscreen' | 'window' | 'element' | 'cursor'
+/** `region` = a fixed recording area chosen when the recording started (not a setting). */
+export type CaptureMode = 'fullscreen' | 'window' | 'element' | 'cursor' | 'region'
 export type CaptureTrigger = 'click' | 'text-commit' | 'manual' | 'key'
 export type OutputFormat = 'png' | 'jpg' | 'webp'
 export type Language = 'en' | 'ko'
@@ -101,6 +102,30 @@ export interface SessionState {
 }
 
 export type CaptureStatus = 'idle' | 'recording' | 'paused'
+
+// ---- recording-area picker ----
+
+/** Display geometry handed to a picker window (DIP, global desktop coordinates). */
+export interface PickerDisplay extends Rect {
+  id: number
+  scaleFactor: number
+}
+/** A top-level window the picker can snap to (DIP, global). */
+export interface PickerWindow {
+  rect: Rect
+  title: string
+  process: string
+}
+export interface PickerInfo {
+  display: PickerDisplay
+  windows: PickerWindow[]
+  language: Language
+}
+/** Outcome of the picker. `rect` is DIP, relative to the picker's display origin. */
+export type RegionPick =
+  | { kind: 'rect'; displayId: number; rect: Rect }
+  | { kind: 'fullscreen' }
+  | { kind: 'cancel' }
 
 /** Settings — every feature is individually toggleable per the project plan. */
 export interface AppSettings {

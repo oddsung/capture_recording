@@ -6,13 +6,14 @@ import type { Point, Rect } from '@shared/types'
 const iconPath = join(__dirname, '../../resources/icon.png')
 
 /** Load either the dev server route or the built file for a given HTML entry. */
-function loadEntry(win: BrowserWindow, htmlFile: string): void {
+function loadEntry(win: BrowserWindow, htmlFile: string, query?: Record<string, string>): void {
   const devUrl = process.env['ELECTRON_RENDERER_URL']
   if (is.dev && devUrl) {
     const suffix = htmlFile === 'index.html' ? '' : `/${htmlFile}`
-    win.loadURL(`${devUrl}${suffix}`)
+    const qs = query ? `?${new URLSearchParams(query).toString()}` : ''
+    win.loadURL(`${devUrl}${suffix}${qs}`)
   } else {
-    win.loadFile(join(__dirname, `../renderer/${htmlFile}`))
+    win.loadFile(join(__dirname, `../renderer/${htmlFile}`), query ? { query } : undefined)
   }
 }
 
@@ -20,6 +21,7 @@ export class WindowManager {
   private panel: BrowserWindow | null = null
   private overlay: BrowserWindow | null = null
   private hud: BrowserWindow | null = null
+  private pickers: BrowserWindow[] = []
 
   createControlPanel(): BrowserWindow {
     const win = new BrowserWindow({
@@ -134,6 +136,66 @@ export class WindowManager {
       this.hud = null
     })
     return win
+  }
+
+  /**
+   * Recording-area picker: one transparent, always-on-top window per display so
+   * the user can drag a rectangle or click a window. Content-protected like the
+   * rest of our UI. `onDismissed` fires if a picker is closed externally
+   * (Alt+F4 etc.) — the controller treats that as cancel.
+   */
+  openPickers(onDismissed: () => void): void {
+    this.closePickers()
+    const active = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+    for (const d of screen.getAllDisplays()) {
+      const win = new BrowserWindow({
+        ...d.bounds,
+        show: false,
+        frame: false,
+        transparent: true,
+        resizable: false,
+        movable: false,
+        minimizable: false,
+        maximizable: false,
+        skipTaskbar: true,
+        hasShadow: false,
+        alwaysOnTop: true,
+        fullscreenable: false,
+        webPreferences: {
+          preload: join(__dirname, '../preload/index.js'),
+          sandbox: false,
+          contextIsolation: true
+        }
+      })
+      win.setAlwaysOnTop(true, 'screen-saver')
+      win.setContentProtection(true)
+      win.once('ready-to-show', () => {
+        if (win.isDestroyed()) return
+        // Keyboard (Esc/Enter) goes to the picker on the display the cursor is on.
+        if (d.id === active.id) {
+          win.show()
+          win.focus()
+        } else {
+          win.showInactive()
+        }
+      })
+      win.on('closed', () => {
+        this.pickers = this.pickers.filter((w) => w !== win)
+        onDismissed()
+      })
+      loadEntry(win, 'picker.html', { display: String(d.id) })
+      this.pickers.push(win)
+    }
+  }
+
+  closePickers(): void {
+    const wins = this.pickers
+    this.pickers = []
+    for (const w of wins) {
+      if (w.isDestroyed()) continue
+      w.removeAllListeners('closed') // closing on purpose — not a user dismissal
+      w.destroy()
+    }
   }
 
   getPanel(): BrowserWindow | null {
